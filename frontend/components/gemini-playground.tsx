@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Mic, StopCircle, Video, Monitor } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -75,6 +76,10 @@ export default function GeminiVoiceChat() {
   const [chatMode, setChatMode] = useState<'audio' | 'video' | null>(null);
   const [videoSource, setVideoSource] = useState<'camera' | 'screen' | null>(null);
 
+  // State for microphone devices
+  const [micDevices, setMicDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedMic, setSelectedMic] = useState<string>('');
+
   const voices = ["Puck", "Charon", "Kore", "Fenrir", "Aoede"];
   const audioBufferRef = useRef<Float32Array[]>([]);
   const isPlayingRef = useRef(false);
@@ -134,7 +139,12 @@ export default function GeminiVoiceChat() {
       });
 
       // Get microphone stream
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true } });
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: { 
+          deviceId: selectedMic ? { exact: selectedMic } : undefined,
+          echoCancellation: true 
+        } 
+      });
       console.log("Audio stream started with echo cancellation");
 
       // Always share the audio stream with SpeechRecognition (for transcription)
@@ -530,6 +540,17 @@ export default function GeminiVoiceChat() {
       }
     };
   }, [config.wakeWord, config.cancelPhrase, isStreaming]);
+
+  // On component mount, get available audio input devices.
+  useEffect(() => {
+    navigator.mediaDevices.enumerateDevices().then((devices) => {
+      const mics = devices.filter((device) => device.kind === "audioinput");
+      setMicDevices(mics);
+      if (mics.length && !selectedMic) {
+        setSelectedMic(mics[0].deviceId);
+      }
+    });
+  }, []);
 
   return (
     <div className="container mx-auto py-8 px-4 sm:px-6 md:px-8">
