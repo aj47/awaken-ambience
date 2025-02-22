@@ -657,6 +657,26 @@ export default function GeminiVoiceChat() {
                 </div>
               </>
             )}
+
+            <div className="space-y-2">
+              <Label htmlFor="mic-select">Microphone</Label>
+              <Select
+                value={selectedMic}
+                onValueChange={(value) => setSelectedMic(value)}
+                disabled={isConnected}
+              >
+                <SelectTrigger id="mic-select">
+                  <SelectValue placeholder="Select a microphone" />
+                </SelectTrigger>
+                <SelectContent>
+                  {micDevices.map((mic, index) => (
+                    <SelectItem key={mic.deviceId} value={mic.deviceId}>
+                      {mic.label || `Microphone ${index + 1}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </CardContent>
         </Card>
 
