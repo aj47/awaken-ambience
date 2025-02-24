@@ -43,6 +43,10 @@ class GeminiConnection:
         if not self.config:
             raise ValueError("Configuration must be set before connecting")
 
+        # Get recent memories and format them into the system prompt
+        memories = self.memory_db.get_recent_memories(self.config.get("client_id", "default"), limit=5)
+        memory_context = "\n".join([f"- {memory[0]}" for memory in memories])
+        
         # Send initial setup message with configuration
         setup_message = {
             "setup": {
@@ -104,7 +108,9 @@ class GeminiConnection:
                 "system_instruction": {
                     "parts": [
                         {
-                            "text": self.config["systemPrompt"] + " You can also use the memory functions store_memory, get_recent_memories, and search_memories."
+                            "text": self.config["systemPrompt"] + 
+                            "\n\nHere are recent memories:\n" + memory_context +
+                            "\n\nYou can also use the memory functions store_memory, get_recent_memories, and search_memories."
                         }
                     ]
                 }
