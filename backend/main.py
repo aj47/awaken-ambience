@@ -175,21 +175,11 @@ class GeminiConnection:
             responses.append({
                 "id": f.get("id"),
                 "name": func_name,
-                "response": {
-                    "name": func_name,
-                    "content": result
-                }
+                "response": result
             })
         tool_response = {
             "toolResponse": {
-                "functionResponses": [
-                    {
-                        "response": {
-                            "name": func_name,
-                            "content": result
-                        }
-                    }
-                ]
+                "functionResponses": responses
             }
         }
         await self.ws.send(json.dumps(tool_response))
@@ -300,15 +290,6 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                         if "toolCall" in response:
                             await gemini.handle_tool_call(response["toolCall"])
                             continue
-                        # Create a copy of the response to avoid modifying the original
-                        response_copy = response.copy()
-
-                        # Remove 'modelTurn' from 'serverContent' if it exists
-                        if "serverContent" in response_copy and "modelTurn" in response_copy["serverContent"]:
-                            del response_copy["serverContent"]["modelTurn"]
-
-                        print("rcv:", response_copy)
-                        
                         # Only store meaningful text responses
                         if "serverContent" in response:
                             content = response["serverContent"]
@@ -347,7 +328,9 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                                 continue
        
                             if "inlineData" in p:
-                                print(f"Sending audio response ({len(p['inlineData']['data'])} bytes)")
+                                # Truncate audio data in debug output
+                                data = p['inlineData']['data']
+                                print(f"Sending audio response ({len(data)} bytes): {data[:1]}...")
                                 await websocket.send_json({
                                     "type": "audio",
                                     "data": p["inlineData"]["data"]
