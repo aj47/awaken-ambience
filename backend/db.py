@@ -22,6 +22,7 @@ class MemoryDB:
 
     def store_memory(self, client_id: str, content: str, type: str = "conversation"):
         print(f"[MemoryDB] Storing {type} memory for client {client_id[:8]}...")
+        print(f"[MemoryDB] Content preview: {content[:100]}...")
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 "INSERT INTO memories (client_id, content, type) VALUES (?, ?, ?)",
@@ -30,12 +31,15 @@ class MemoryDB:
             conn.commit()
 
     def get_recent_memories(self, client_id: str, limit: int = 5):
+        print(f"[MemoryDB] Fetching {limit} recent memories for client {client_id[:8]}...")
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute(
                 "SELECT content, timestamp FROM memories WHERE client_id = ? ORDER BY timestamp DESC LIMIT ?",
                 (client_id, limit)
             )
-            return cursor.fetchall()
+            memories = cursor.fetchall()
+            print(f"[MemoryDB] Found {len(memories)} memories")
+            return memories
 
     def clear_memories(self, client_id: str):
         with sqlite3.connect(self.db_path) as conn:
