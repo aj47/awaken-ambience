@@ -43,8 +43,8 @@ class GeminiConnection:
         if not self.config:
             raise ValueError("Configuration must be set before connecting")
 
-        # Get recent memories and format them into the system prompt
-        memories = self.memory_db.get_recent_memories(self.config.get("client_id", "default"), limit=5)
+        # Get all memories and format them into the system prompt
+        memories = self.memory_db.get_all_memories(self.config.get("client_id", "default"))
         memory_context = "\n".join([f"- {memory[0]}" for memory in memories])
         
         # Send initial setup message with configuration

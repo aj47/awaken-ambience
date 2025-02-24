@@ -45,6 +45,24 @@ class MemoryDB:
             conn.commit()
         print(f"[MemoryDB] Successfully stored memory")
 
+    def get_all_memories(self, client_id: str):
+        """Retrieves all memories for a client from the database.
+        
+        Args:
+            client_id: The client identifier
+        """
+        print(f"[MemoryDB] Fetching all memories for client {client_id[:8]}...")
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                "SELECT content, timestamp FROM memories WHERE client_id = ? ORDER BY timestamp DESC",
+                (client_id,)
+            )
+            memories = cursor.fetchall()
+            print(f"[MemoryDB] Found {len(memories)} memories")
+            for i, memory in enumerate(memories, 1):
+                print(f"[MemoryDB] Memory {i}: {memory[0][:100]}... ({memory[1]})")
+            return memories
+
     def get_recent_memories(self, client_id: str, limit: int = 5):
         """Retrieves recent memories from the database.
         
