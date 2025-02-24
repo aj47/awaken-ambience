@@ -60,13 +60,51 @@ class GeminiConnection:
                 "tools": [
                     { "googleSearch": {} },
                     {
-                        "function_declarations": []
+                        "function_declarations": [
+                            {
+                                "name": "store_memory",
+                                "description": "Stores a memory in the database using MemoryDB.",
+                                "parameters": {
+                                    "type": "object",
+                                    "properties": {
+                                        "client_id": { "type": "string" },
+                                        "content": { "type": "string" },
+                                        "context": { "type": "string" },
+                                        "tags": { "type": "array", "items": { "type": "string" } },
+                                        "type": { "type": "string" }
+                                    }
+                                }
+                            },
+                            {
+                                "name": "get_recent_memories",
+                                "description": "Retrieves recent memories from the database.",
+                                "parameters": {
+                                    "type": "object",
+                                    "properties": {
+                                        "client_id": { "type": "string" },
+                                        "limit": { "type": "integer" }
+                                    }
+                                }
+                            },
+                            {
+                                "name": "search_memories",
+                                "description": "Searches memories based on query.",
+                                "parameters": {
+                                    "type": "object",
+                                    "properties": {
+                                        "client_id": { "type": "string" },
+                                        "query": { "type": "string" },
+                                        "limit": { "type": "integer" }
+                                    }
+                                }
+                            }
+                        ]
                     }
                 ],
                 "system_instruction": {
                     "parts": [
                         {
-                            "text": self.config["systemPrompt"]
+                            "text": self.config["systemPrompt"] + " You can also use the memory functions store_memory, get_recent_memories, and search_memories."
                         }
                     ]
                 }
