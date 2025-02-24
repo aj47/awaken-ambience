@@ -3,9 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 import json
 import os
+from datetime import datetime
 from dotenv import load_dotenv
 from websockets import connect
 from typing import Dict
+from db import MemoryDB
 
 load_dotenv()
 
@@ -32,6 +34,7 @@ class GeminiConnection:
         self.ws = None
         self.config = None
         self.interrupted = False
+        self.memory_db = MemoryDB()
 
     async def connect(self):
         """Initialize connection to Gemini"""
@@ -40,6 +43,10 @@ class GeminiConnection:
         if not self.config:
             raise ValueError("Configuration must be set before connecting")
 
+        # Get recent memories and format them into the system prompt
+        memories = self.memory_db.get_recent_memories(self.config.get("client_id", "default"), limit=5)
+        memory_context = "\n".join([f"- {memory[0]}" for memory in memories])
+        
         # Send initial setup message with configuration
         setup_message = {
             "setup": {
@@ -57,13 +64,53 @@ class GeminiConnection:
                 "tools": [
                     { "googleSearch": {} },
                     {
-                        "function_declarations": []
+                        "function_declarations": [
+                            {
+                                "name": "store_memory",
+                                "description": "Stores a memory in the database using MemoryDB.",
+                                "parameters": {
+                                    "type": "object",
+                                    "properties": {
+                                        "client_id": { "type": "string" },
+                                        "content": { "type": "string" },
+                                        "context": { "type": "string" },
+                                        "tags": { "type": "array", "items": { "type": "string" } },
+                                        "type": { "type": "string" }
+                                    }
+                                }
+                            },
+                            {
+                                "name": "get_recent_memories",
+                                "description": "Retrieves recent memories from the database.",
+                                "parameters": {
+                                    "type": "object",
+                                    "properties": {
+                                        "client_id": { "type": "string" },
+                                        "limit": { "type": "integer" }
+                                    }
+                                }
+                            },
+                            {
+                                "name": "search_memories",
+                                "description": "Searches memories based on query.",
+                                "parameters": {
+                                    "type": "object",
+                                    "properties": {
+                                        "client_id": { "type": "string" },
+                                        "query": { "type": "string" },
+                                        "limit": { "type": "integer" }
+                                    }
+                                }
+                            }
+                        ]
                     }
                 ],
                 "system_instruction": {
                     "parts": [
                         {
-                            "text": self.config["systemPrompt"]
+                            "text": self.config["systemPrompt"] + 
+                            "\n\nHere are recent memories:\n" + memory_context +
+                            "\n\nYou can also use the memory functions store_memory, get_recent_memories, and search_memories."
                         }
                     ]
                 }
@@ -89,7 +136,7 @@ class GeminiConnection:
                         "mime_type": "audio/pcm"
                     }
                 ]
-            }
+        }
         }
         await self.ws.send(json.dumps(realtime_input_msg))
 
@@ -103,6 +150,69 @@ class GeminiConnection:
             print("Closing Gemini websocket connection.")
             await self.ws.close()
             self.ws = None
+
+    async def handle_tool_call(self, tool_call):
+        responses = []
+        for f in tool_call.get("functionCalls", []):
+            print(f"  <- Function call: {f}")
+            func_name = f.get("name")
+            args = f.get("args", {})
+            if func_name == "store_memory":
+                result = self.memory_db.store_memory(
+                    args.get("client_id", ""),
+                    args.get("content", ""),
+                    args.get("context", ""),
+                    args.get("tags", []),
+                    args.get("type", "")
+                )
+                response_text = f"Stored memory: {args.get('content', '')[:50]}..."
+            elif func_name == "get_recent_memories":
+                result = self.memory_db.get_recent_memories(
+                    args.get("client_id", ""),
+                    args.get("limit", 5)
+                )
+                response_text = f"Here are your recent memories:\n"
+                for i, memory in enumerate(result, 1):
+                    response_text += f"{i}. {memory[0][:100]}...\n"
+            elif func_name == "search_memories":
+                result = self.memory_db.search_memories(
+                    args.get("client_id", ""),
+                    args.get("query", ""),
+                    args.get("limit", 5)
+                )
+                response_text = f"Found {len(result)} memories matching '{args.get('query', '')}':\n"
+                for i, memory in enumerate(result, 1):
+                    response_text += f"{i}. {memory[0][:100]}...\n"
+            else:
+                result = {"error": f"Unknown function {func_name}"}
+                response_text = f"Sorry, I don't know how to handle that function."
+
+            responses.append({
+                "id": f.get("id"),
+                "name": func_name,
+                "response": {
+                    "name": func_name,
+                    "content": result
+                }
+            })
+
+            # Send a verbal response about the tool call result
+            await self.ws.send(json.dumps({
+                "clientContent": {
+                    "turns": [{
+                        "parts": [{"text": response_text}],
+                        "role": "user"
+                    }],
+                    "turnComplete": True
+                }
+            }))
+
+        tool_response = {
+            "toolResponse": {
+                "functionResponses": responses
+            }
+        }
+        await self.ws.send(json.dumps(tool_response))
 
     async def send_image(self, image_data: str):
         """Send image data to Gemini"""
@@ -121,6 +231,7 @@ class GeminiConnection:
 
 # Store active connections
 connections: Dict[str, GeminiConnection] = {}
+memory_db = MemoryDB()
 
 @app.websocket("/ws/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: str):
@@ -162,6 +273,10 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                             if not gemini.ws:
                                 print(f"[Client {client_id}] Gemini connection is closed. Reconnecting...")
                                 await gemini.connect()
+                            
+                            # Skip storing raw audio messages
+                            pass
+                            
                             await gemini.send_audio(message_content["data"])    
                         elif msg_type == "image":
                             await gemini.send_image(message_content["data"])
@@ -201,6 +316,20 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                     try:
                         msg = await gemini.receive()
                         response = json.loads(msg)
+                        print("rcv:", response)
+                        if "toolCall" in response:
+                            await gemini.handle_tool_call(response["toolCall"])
+                            continue
+                        # Only store meaningful text responses
+                        if "serverContent" in response:
+                            content = response["serverContent"]
+                            if "modelTurn" in content and "text" in str(content["modelTurn"]):
+                                print(f"[Memory] Storing response for client {client_id}")
+                                memory_db.store_memory(
+                                    client_id,
+                                    json.dumps(content["modelTurn"]),
+                                    "response"
+                                )
                     except Exception as ex:
                         print(f"Gemini receive error: {ex}")
                         break
@@ -229,7 +358,9 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                                 continue
        
                             if "inlineData" in p:
-                                print(f"Sending audio response ({len(p['inlineData']['data'])} bytes)")
+                                # Truncate audio data in debug output
+                                data = p['inlineData']['data']
+                                print(f"Sending audio response ({len(data)} bytes): {data[:1]}...")
                                 await websocket.send_json({
                                     "type": "audio",
                                     "data": p["inlineData"]["data"]
