@@ -54,6 +54,12 @@ class GeminiConnection:
                         }
                     }
                 },
+                "tools": [
+                    { "googleSearch": {} },
+                    {
+                        "function_declarations": []
+                    }
+                ],
                 "system_instruction": {
                     "parts": [
                         {
