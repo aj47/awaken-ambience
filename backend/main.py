@@ -6,6 +6,7 @@ import os
 from dotenv import load_dotenv
 from websockets import connect
 from typing import Dict
+from .db import MemoryDB
 
 load_dotenv()
 
@@ -32,6 +33,7 @@ class GeminiConnection:
         self.ws = None
         self.config = None
         self.interrupted = False
+        self.memory_db = MemoryDB()
 
     async def connect(self):
         """Initialize connection to Gemini"""
@@ -121,6 +123,7 @@ class GeminiConnection:
 
 # Store active connections
 connections: Dict[str, GeminiConnection] = {}
+memory_db = MemoryDB()
 
 @app.websocket("/ws/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: str):
@@ -162,6 +165,14 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                             if not gemini.ws:
                                 print(f"[Client {client_id}] Gemini connection is closed. Reconnecting...")
                                 await gemini.connect()
+                            
+                            # Store the audio message in memory
+                            memory_db.store_memory(
+                                client_id,
+                                json.dumps({"type": "audio", "timestamp": str(datetime.now())}),
+                                "input"
+                            )
+                            
                             await gemini.send_audio(message_content["data"])    
                         elif msg_type == "image":
                             await gemini.send_image(message_content["data"])
@@ -201,6 +212,16 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                     try:
                         msg = await gemini.receive()
                         response = json.loads(msg)
+                        
+                        # Store the response in memory
+                        if "serverContent" in response:
+                            content = response["serverContent"]
+                            if "modelTurn" in content:
+                                memory_db.store_memory(
+                                    client_id,
+                                    json.dumps(content["modelTurn"]),
+                                    "response"
+                                )
                     except Exception as ex:
                         print(f"Gemini receive error: {ex}")
                         break
