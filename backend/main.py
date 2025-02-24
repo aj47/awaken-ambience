@@ -7,7 +7,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 from websockets import connect
 from typing import Dict
-from .db import MemoryDB
+from db import MemoryDB
 
 load_dotenv()
 
