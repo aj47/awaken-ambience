@@ -130,7 +130,7 @@ class GeminiConnection:
                         "mime_type": "audio/pcm"
                     }
                 ]
-            }
+        }
         }
         await self.ws.send(json.dumps(realtime_input_msg))
 
@@ -247,6 +247,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                     try:
                         msg = await gemini.receive()
                         response = json.loads(msg)
+                        print("rcv:", response)
                         
                         # Only store meaningful text responses
                         if "serverContent" in response:
