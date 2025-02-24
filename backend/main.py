@@ -165,19 +165,28 @@ class GeminiConnection:
                     args.get("tags", []),
                     args.get("type", "")
                 )
+                response_text = f"Stored memory: {args.get('content', '')[:50]}..."
             elif func_name == "get_recent_memories":
                 result = self.memory_db.get_recent_memories(
                     args.get("client_id", ""),
                     args.get("limit", 5)
                 )
+                response_text = f"Here are your recent memories:\n"
+                for i, memory in enumerate(result, 1):
+                    response_text += f"{i}. {memory[0][:100]}...\n"
             elif func_name == "search_memories":
                 result = self.memory_db.search_memories(
                     args.get("client_id", ""),
                     args.get("query", ""),
                     args.get("limit", 5)
                 )
+                response_text = f"Found {len(result)} memories matching '{args.get('query', '')}':\n"
+                for i, memory in enumerate(result, 1):
+                    response_text += f"{i}. {memory[0][:100]}...\n"
             else:
                 result = {"error": f"Unknown function {func_name}"}
+                response_text = f"Sorry, I don't know how to handle that function."
+
             responses.append({
                 "id": f.get("id"),
                 "name": func_name,
@@ -186,16 +195,21 @@ class GeminiConnection:
                     "content": result
                 }
             })
+
+            # Send a verbal response about the tool call result
+            await self.ws.send(json.dumps({
+                "clientContent": {
+                    "turns": [{
+                        "parts": [{"text": response_text}],
+                        "role": "user"
+                    }],
+                    "turnComplete": True
+                }
+            }))
+
         tool_response = {
             "toolResponse": {
-                "functionResponses": [
-                    {
-                        "response": {
-                            "name": func_name,
-                            "content": result
-                        }
-                    }
-                ]
+                "functionResponses": responses
             }
         }
         await self.ws.send(json.dumps(tool_response))
