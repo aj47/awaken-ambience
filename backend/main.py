@@ -175,11 +175,21 @@ class GeminiConnection:
             responses.append({
                 "id": f.get("id"),
                 "name": func_name,
-                "response": result
+                "response": {
+                    "name": func_name,
+                    "content": result
+                }
             })
         tool_response = {
             "toolResponse": {
-                "functionResponses": responses
+                "functionResponses": [
+                    {
+                        "response": {
+                            "name": func_name,
+                            "content": result
+                        }
+                    }
+                ]
             }
         }
         await self.ws.send(json.dumps(tool_response))
