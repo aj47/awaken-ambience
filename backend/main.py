@@ -247,7 +247,16 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                     try:
                         msg = await gemini.receive()
                         response = json.loads(msg)
+                        data = p['inlineData']['data']                             
                         print("rcv:", response)
+                        # Create a copy of the response to avoid modifying the original
+                        response_copy = response.copy()
+
+                        # Remove 'modelTurn' from 'serverContent' if it exists
+                        if "serverContent" in response_copy and "modelTurn" in response_copy["serverContent"]:
+                            del response_copy["serverContent"]["modelTurn"]
+
+                        print("rcv:", response_copy)
                         
                         # Only store meaningful text responses
                         if "serverContent" in response:
