@@ -41,22 +41,28 @@ export default function GeminiVoiceChat() {
   useEffect(() => {
     const storedConfig = localStorage.getItem('geminiConfig');
     if (storedConfig) {
-      const parsed = JSON.parse(storedConfig);
-      setConfig((prev) => ({
-        ...prev,
-        ...parsed,
-      }));
+      try {
+        const parsed = JSON.parse(storedConfig);
+        // Merge with default config to ensure all fields are present
+        setConfig((prev) => ({
+          systemPrompt: parsed.systemPrompt || prev.systemPrompt,
+          voice: parsed.voice || prev.voice,
+          googleSearch: parsed.googleSearch !== undefined ? parsed.googleSearch : prev.googleSearch,
+          allowInterruptions: parsed.allowInterruptions !== undefined ? parsed.allowInterruptions : prev.allowInterruptions,
+          isWakeWordEnabled: parsed.isWakeWordEnabled !== undefined ? parsed.isWakeWordEnabled : prev.isWakeWordEnabled,
+          wakeWord: parsed.wakeWord || prev.wakeWord,
+          cancelPhrase: parsed.cancelPhrase || prev.cancelPhrase
+        }));
+      } catch (e) {
+        console.error('Failed to parse stored config:', e);
+      }
     }
   }, []);
 
   // Persist settings to local storage when they change
   useEffect(() => {
-    const { systemPrompt, voice, isWakeWordEnabled, wakeWord, cancelPhrase } = config;
-    localStorage.setItem(
-      'geminiConfig',
-      JSON.stringify({ systemPrompt, voice, isWakeWordEnabled, wakeWord, cancelPhrase })
-    );
-  }, [config.systemPrompt, config.voice, config.isWakeWordEnabled, config.wakeWord, config.cancelPhrase]);
+    localStorage.setItem('geminiConfig', JSON.stringify(config));
+  }, [config]);
   const [wakeWordTranscript, setWakeWordTranscript] = useState('');
   const recognitionRef = useRef(null);
   const lastInterruptTimeRef = useRef<number>(0);
@@ -217,14 +223,12 @@ export default function GeminiVoiceChat() {
 
   // Stop streaming
   const stopStream = () => {
-    // Clear all audio buffers
-    audioBufferRef.current = [];
-    
     // Stop any active audio playback
     if (currentAudioSourceRef.current) {
       currentAudioSourceRef.current.stop();
       currentAudioSourceRef.current.disconnect();
       currentAudioSourceRef.current = null;
+      isPlayingRef.current = false;
     }
 
     // Add transcript reset
@@ -282,41 +286,51 @@ export default function GeminiVoiceChat() {
   };
 
   const playAudioData = async (audioData) => {
-    audioBufferRef.current.push(audioData);
-    if (!isPlayingRef.current) {
-      playNextInQueue(); // Start playback if not already playing
+    // Create a queue for audio chunks
+    if (!audioBufferRef.current) {
+      audioBufferRef.current = [];
     }
-  }
+    
+    // Add new audio data to queue
+    audioBufferRef.current.push(audioData);
+    
+    // If nothing is playing, start playback
+    if (!isPlayingRef.current) {
+      playNextChunk();
+    }
+  };
 
-  const playNextInQueue = async () => {
-    if (!audioContextRef.current || audioBufferRef.current.length === 0) {
-      console.log("No audio context or audioBuffer is empty. Ending playback.");
+  const playNextChunk = async () => {
+    if (!audioBufferRef.current || audioBufferRef.current.length === 0) {
       isPlayingRef.current = false;
       return;
     }
     
-    // Prevent memory leaks by limiting queue size
-    if (audioBufferRef.current.length > 10) {
-      console.log("Audio buffer queue too large, clearing excess");
-      audioBufferRef.current = audioBufferRef.current.slice(-10); // Keep last 10 items
-    }
-
-    isPlayingRef.current = true;
-    const audioData = audioBufferRef.current.shift();
-    console.log("Playing next audio buffer. Remaining queue length:", audioBufferRef.current.length);
+    // Get the next chunk from queue
+    const chunk = audioBufferRef.current.shift();
     
-    const buffer = audioContextRef.current.createBuffer(1, audioData.length, 24000);
-    buffer.copyToChannel(audioData, 0);
+    // Create buffer and source
+    const buffer = audioContextRef.current.createBuffer(1, chunk.length, 24000);
+    buffer.copyToChannel(chunk, 0);
     
     const source = audioContextRef.current.createBufferSource();
     source.buffer = buffer;
     source.connect(audioContextRef.current.destination);
+    
+    // Start playing immediately
+    source.start(0);
+    isPlayingRef.current = true;
     currentAudioSourceRef.current = source;
+    
+    // When this chunk ends, play the next one
     source.onended = () => {
-      console.log("Audio playback ended, checking for next buffer...");
-      playNextInQueue();
+      if (audioBufferRef.current.length > 0) {
+        playNextChunk();
+      } else {
+        isPlayingRef.current = false;
+        currentAudioSourceRef.current = null;
+      }
     };
-    source.start();
   };
 
 

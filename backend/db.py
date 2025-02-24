@@ -45,6 +45,24 @@ class MemoryDB:
             conn.commit()
         print(f"[MemoryDB] Successfully stored memory")
 
+    def get_all_memories(self, client_id: str):
+        """Retrieves all memories for a client from the database.
+        
+        Args:
+            client_id: The client identifier
+        """
+        print(f"[MemoryDB] Fetching all memories for client {client_id[:8]}...")
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                "SELECT content, timestamp FROM memories WHERE client_id = ? ORDER BY timestamp DESC",
+                (client_id,)
+            )
+            memories = cursor.fetchall()
+            print(f"[MemoryDB] Found {len(memories)} memories")
+            for i, memory in enumerate(memories, 1):
+                print(f"[MemoryDB] Memory {i}: {memory[0][:100]}... ({memory[1]})")
+            return memories
+
     def get_recent_memories(self, client_id: str, limit: int = 5):
         """Retrieves recent memories from the database.
         
@@ -85,6 +103,25 @@ class MemoryDB:
             return memories
 
     def clear_memories(self, client_id: str):
+        """Clears all memories for a client"""
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("DELETE FROM memories WHERE client_id = ?", (client_id,))
             conn.commit()
+            print(f"[MemoryDB] Cleared all memories for client {client_id[:8]}")
+
+    def delete_memory(self, memory_id: int):
+        """Deletes a specific memory by ID"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
+            conn.commit()
+            print(f"[MemoryDB] Deleted memory ID {memory_id}")
+
+    def update_memory(self, memory_id: int, new_content: str):
+        """Updates the content of a specific memory"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE memories SET content = ? WHERE id = ?",
+                (new_content, memory_id)
+            )
+            conn.commit()
+            print(f"[MemoryDB] Updated memory ID {memory_id}")

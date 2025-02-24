@@ -43,8 +43,8 @@ class GeminiConnection:
         if not self.config:
             raise ValueError("Configuration must be set before connecting")
 
-        # Get recent memories and format them into the system prompt
-        memories = self.memory_db.get_recent_memories(self.config.get("client_id", "default"), limit=5)
+        # Get all memories and format them into the system prompt
+        memories = self.memory_db.get_all_memories(self.config.get("client_id", "default"))
         memory_context = "\n".join([f"- {memory[0]}" for memory in memories])
         
         # Send initial setup message with configuration
@@ -99,6 +99,27 @@ class GeminiConnection:
                                         "client_id": { "type": "string" },
                                         "query": { "type": "string" },
                                         "limit": { "type": "integer" }
+                                    }
+                                }
+                            },
+                            {
+                                "name": "delete_memory",
+                                "description": "Deletes a specific memory by its ID.",
+                                "parameters": {
+                                    "type": "object",
+                                    "properties": {
+                                        "memory_id": { "type": "integer" }
+                                    }
+                                }
+                            },
+                            {
+                                "name": "update_memory",
+                                "description": "Updates the content of a specific memory.",
+                                "parameters": {
+                                    "type": "object",
+                                    "properties": {
+                                        "memory_id": { "type": "integer" },
+                                        "new_content": { "type": "string" }
                                     }
                                 }
                             }
@@ -183,6 +204,15 @@ class GeminiConnection:
                 response_text = f"Found {len(result)} memories matching '{args.get('query', '')}':\n"
                 for i, memory in enumerate(result, 1):
                     response_text += f"{i}. {memory[0][:100]}...\n"
+            elif func_name == "delete_memory":
+                self.memory_db.delete_memory(args.get("memory_id"))
+                response_text = f"Successfully deleted memory ID {args.get('memory_id')}"
+            elif func_name == "update_memory":
+                self.memory_db.update_memory(
+                    args.get("memory_id"),
+                    args.get("new_content")
+                )
+                response_text = f"Successfully updated memory ID {args.get('memory_id')}"
             else:
                 result = {"error": f"Unknown function {func_name}"}
                 response_text = f"Sorry, I don't know how to handle that function."
