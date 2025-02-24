@@ -145,6 +145,45 @@ class GeminiConnection:
             await self.ws.close()
             self.ws = None
 
+    async def handle_tool_call(self, tool_call):
+        responses = []
+        for f in tool_call.get("functionCalls", []):
+            print(f"  <- Function call: {f}")
+            func_name = f.get("name")
+            args = f.get("args", {})
+            if func_name == "store_memory":
+                result = self.memory_db.store_memory(
+                    args.get("client_id", ""),
+                    args.get("content", ""),
+                    args.get("context", ""),
+                    args.get("tags", []),
+                    args.get("type", "")
+                )
+            elif func_name == "get_recent_memories":
+                result = self.memory_db.get_recent_memories(
+                    args.get("client_id", ""),
+                    args.get("limit", 5)
+                )
+            elif func_name == "search_memories":
+                result = self.memory_db.search_memories(
+                    args.get("client_id", ""),
+                    args.get("query", ""),
+                    args.get("limit", 5)
+                )
+            else:
+                result = {"error": f"Unknown function {func_name}"}
+            responses.append({
+                "id": f.get("id"),
+                "name": func_name,
+                "response": result
+            })
+        tool_response = {
+            "toolResponse": {
+                "functionResponses": responses
+            }
+        }
+        await self.ws.send(json.dumps(tool_response))
+
     async def send_image(self, image_data: str):
         """Send image data to Gemini"""
         image_message = {
@@ -247,8 +286,10 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                     try:
                         msg = await gemini.receive()
                         response = json.loads(msg)
-                        data = p['inlineData']['data']                             
                         print("rcv:", response)
+                        if "toolCall" in response:
+                            await gemini.handle_tool_call(response["toolCall"])
+                            continue
                         # Create a copy of the response to avoid modifying the original
                         response_copy = response.copy()
 
