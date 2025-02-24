@@ -217,6 +217,16 @@ export default function GeminiVoiceChat() {
 
   // Stop streaming
   const stopStream = () => {
+    // Clear all audio buffers
+    audioBufferRef.current = [];
+    
+    // Stop any active audio playback
+    if (currentAudioSourceRef.current) {
+      currentAudioSourceRef.current.stop();
+      currentAudioSourceRef.current.disconnect();
+      currentAudioSourceRef.current = null;
+    }
+
     // Add transcript reset
     setWakeWordTranscript('');
     setWakeWordDetected(false);
@@ -255,6 +265,13 @@ export default function GeminiVoiceChat() {
     }
 
     if (wsRef.current) {
+      // Clean up WebSocket event listeners
+      wsRef.current.onopen = null;
+      wsRef.current.onmessage = null;
+      wsRef.current.onerror = null;
+      wsRef.current.onclose = null;
+      
+      // Close and nullify
       wsRef.current.close();
       wsRef.current = null;
     }
@@ -277,6 +294,12 @@ export default function GeminiVoiceChat() {
       isPlayingRef.current = false;
       return;
     }
+    
+    // Prevent memory leaks by limiting queue size
+    if (audioBufferRef.current.length > 10) {
+      console.log("Audio buffer queue too large, clearing excess");
+      audioBufferRef.current = audioBufferRef.current.slice(-10); // Keep last 10 items
+    }
 
     isPlayingRef.current = true;
     const audioData = audioBufferRef.current.shift();
@@ -298,6 +321,8 @@ export default function GeminiVoiceChat() {
 
 
   useEffect(() => {
+    let isMounted = true;
+    
     if (videoEnabled && videoRef.current) {
       const startVideo = async () => {
         try {
@@ -339,6 +364,8 @@ export default function GeminiVoiceChat() {
 
       // Cleanup function
       return () => {
+        if (!isMounted) return;
+        
         if (videoStreamRef.current) {
           videoStreamRef.current.getTracks().forEach(track => track.stop());
           videoStreamRef.current = null;
@@ -380,6 +407,12 @@ export default function GeminiVoiceChat() {
     return () => {
       stopVideo();
       stopStream();
+      
+      // Clean up audio context
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
     };
   }, []);
 
