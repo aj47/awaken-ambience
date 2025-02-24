@@ -217,14 +217,12 @@ export default function GeminiVoiceChat() {
 
   // Stop streaming
   const stopStream = () => {
-    // Clear all audio buffers
-    audioBufferRef.current = [];
-    
     // Stop any active audio playback
     if (currentAudioSourceRef.current) {
       currentAudioSourceRef.current.stop();
       currentAudioSourceRef.current.disconnect();
       currentAudioSourceRef.current = null;
+      isPlayingRef.current = false;
     }
 
     // Add transcript reset
@@ -282,41 +280,39 @@ export default function GeminiVoiceChat() {
   };
 
   const playAudioData = async (audioData) => {
-    audioBufferRef.current.push(audioData);
-    if (!isPlayingRef.current) {
-      playNextInQueue(); // Start playback if not already playing
-    }
-  }
-
-  const playNextInQueue = async () => {
-    if (!audioContextRef.current || audioBufferRef.current.length === 0) {
-      console.log("No audio context or audioBuffer is empty. Ending playback.");
-      isPlayingRef.current = false;
-      return;
-    }
-    
-    // Prevent memory leaks by limiting queue size
-    if (audioBufferRef.current.length > 10) {
-      console.log("Audio buffer queue too large, clearing excess");
-      audioBufferRef.current = audioBufferRef.current.slice(-10); // Keep last 10 items
-    }
-
-    isPlayingRef.current = true;
-    const audioData = audioBufferRef.current.shift();
-    console.log("Playing next audio buffer. Remaining queue length:", audioBufferRef.current.length);
-    
+    // Create a new buffer for the incoming audio data
     const buffer = audioContextRef.current.createBuffer(1, audioData.length, 24000);
     buffer.copyToChannel(audioData, 0);
     
+    // Create a new source node
     const source = audioContextRef.current.createBufferSource();
     source.buffer = buffer;
     source.connect(audioContextRef.current.destination);
+    
+    // If there's already a source playing, schedule this one to play after it
+    if (currentAudioSourceRef.current) {
+      const currentTime = audioContextRef.current.currentTime;
+      const currentSource = currentAudioSourceRef.current;
+      
+      // Calculate when the current source will finish
+      const endTime = currentTime + currentSource.buffer.duration - currentSource.context.currentTime;
+      
+      // Schedule the new source to start when the current one ends
+      source.start(endTime);
+    } else {
+      // If nothing is playing, start immediately
+      source.start(0);
+      isPlayingRef.current = true;
+    }
+    
+    // Update the current source reference
     currentAudioSourceRef.current = source;
+    
+    // Handle when this source ends
     source.onended = () => {
-      console.log("Audio playback ended, checking for next buffer...");
-      playNextInQueue();
+      isPlayingRef.current = false;
+      currentAudioSourceRef.current = null;
     };
-    source.start();
   };
 
 
