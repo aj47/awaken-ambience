@@ -287,7 +287,9 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                                 continue
        
                             if "inlineData" in p:
-                                print(f"Sending audio response ({len(p['inlineData']['data'])} bytes)")
+                                # Truncate audio data in debug output
+                                data = p['inlineData']['data']
+                                print(f"Sending audio response ({len(data)} bytes): {data[:1]}...")
                                 await websocket.send_json({
                                     "type": "audio",
                                     "data": p["inlineData"]["data"]
