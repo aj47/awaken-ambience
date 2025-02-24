@@ -103,6 +103,25 @@ class MemoryDB:
             return memories
 
     def clear_memories(self, client_id: str):
+        """Clears all memories for a client"""
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("DELETE FROM memories WHERE client_id = ?", (client_id,))
             conn.commit()
+            print(f"[MemoryDB] Cleared all memories for client {client_id[:8]}")
+
+    def delete_memory(self, memory_id: int):
+        """Deletes a specific memory by ID"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
+            conn.commit()
+            print(f"[MemoryDB] Deleted memory ID {memory_id}")
+
+    def update_memory(self, memory_id: int, new_content: str):
+        """Updates the content of a specific memory"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE memories SET content = ? WHERE id = ?",
+                (new_content, memory_id)
+            )
+            conn.commit()
+            print(f"[MemoryDB] Updated memory ID {memory_id}")
