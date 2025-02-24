@@ -41,22 +41,28 @@ export default function GeminiVoiceChat() {
   useEffect(() => {
     const storedConfig = localStorage.getItem('geminiConfig');
     if (storedConfig) {
-      const parsed = JSON.parse(storedConfig);
-      setConfig((prev) => ({
-        ...prev,
-        ...parsed,
-      }));
+      try {
+        const parsed = JSON.parse(storedConfig);
+        // Merge with default config to ensure all fields are present
+        setConfig((prev) => ({
+          systemPrompt: parsed.systemPrompt || prev.systemPrompt,
+          voice: parsed.voice || prev.voice,
+          googleSearch: parsed.googleSearch !== undefined ? parsed.googleSearch : prev.googleSearch,
+          allowInterruptions: parsed.allowInterruptions !== undefined ? parsed.allowInterruptions : prev.allowInterruptions,
+          isWakeWordEnabled: parsed.isWakeWordEnabled !== undefined ? parsed.isWakeWordEnabled : prev.isWakeWordEnabled,
+          wakeWord: parsed.wakeWord || prev.wakeWord,
+          cancelPhrase: parsed.cancelPhrase || prev.cancelPhrase
+        }));
+      } catch (e) {
+        console.error('Failed to parse stored config:', e);
+      }
     }
   }, []);
 
   // Persist settings to local storage when they change
   useEffect(() => {
-    const { systemPrompt, voice, isWakeWordEnabled, wakeWord, cancelPhrase } = config;
-    localStorage.setItem(
-      'geminiConfig',
-      JSON.stringify({ systemPrompt, voice, isWakeWordEnabled, wakeWord, cancelPhrase })
-    );
-  }, [config.systemPrompt, config.voice, config.isWakeWordEnabled, config.wakeWord, config.cancelPhrase]);
+    localStorage.setItem('geminiConfig', JSON.stringify(config));
+  }, [config]);
   const [wakeWordTranscript, setWakeWordTranscript] = useState('');
   const recognitionRef = useRef(null);
   const lastInterruptTimeRef = useRef<number>(0);
