@@ -280,38 +280,50 @@ export default function GeminiVoiceChat() {
   };
 
   const playAudioData = async (audioData) => {
-    // Create a new buffer for the incoming audio data
-    const buffer = audioContextRef.current.createBuffer(1, audioData.length, 24000);
-    buffer.copyToChannel(audioData, 0);
+    // Create a queue for audio chunks
+    if (!audioBufferRef.current) {
+      audioBufferRef.current = [];
+    }
     
-    // Create a new source node
+    // Add new audio data to queue
+    audioBufferRef.current.push(audioData);
+    
+    // If nothing is playing, start playback
+    if (!isPlayingRef.current) {
+      playNextChunk();
+    }
+  };
+
+  const playNextChunk = async () => {
+    if (!audioBufferRef.current || audioBufferRef.current.length === 0) {
+      isPlayingRef.current = false;
+      return;
+    }
+    
+    // Get the next chunk from queue
+    const chunk = audioBufferRef.current.shift();
+    
+    // Create buffer and source
+    const buffer = audioContextRef.current.createBuffer(1, chunk.length, 24000);
+    buffer.copyToChannel(chunk, 0);
+    
     const source = audioContextRef.current.createBufferSource();
     source.buffer = buffer;
     source.connect(audioContextRef.current.destination);
     
-    // If there's already a source playing, schedule this one to play after it
-    if (currentAudioSourceRef.current) {
-      const currentTime = audioContextRef.current.currentTime;
-      const currentSource = currentAudioSourceRef.current;
-      
-      // Calculate when the current source will finish
-      const endTime = currentTime + currentSource.buffer.duration - currentSource.context.currentTime;
-      
-      // Schedule the new source to start when the current one ends
-      source.start(endTime);
-    } else {
-      // If nothing is playing, start immediately
-      source.start(0);
-      isPlayingRef.current = true;
-    }
-    
-    // Update the current source reference
+    // Start playing immediately
+    source.start(0);
+    isPlayingRef.current = true;
     currentAudioSourceRef.current = source;
     
-    // Handle when this source ends
+    // When this chunk ends, play the next one
     source.onended = () => {
-      isPlayingRef.current = false;
-      currentAudioSourceRef.current = null;
+      if (audioBufferRef.current.length > 0) {
+        playNextChunk();
+      } else {
+        isPlayingRef.current = false;
+        currentAudioSourceRef.current = null;
+      }
     };
   };
 
