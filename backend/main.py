@@ -167,12 +167,8 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                                 print(f"[Client {client_id}] Gemini connection is closed. Reconnecting...")
                                 await gemini.connect()
                             
-                            # Store the audio message in memory
-                            memory_db.store_memory(
-                                client_id,
-                                json.dumps({"type": "audio", "timestamp": str(datetime.now())}),
-                                "input"
-                            )
+                            # Skip storing raw audio messages
+                            pass
                             
                             await gemini.send_audio(message_content["data"])    
                         elif msg_type == "image":
@@ -214,10 +210,11 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                         msg = await gemini.receive()
                         response = json.loads(msg)
                         
-                        # Store the response in memory
+                        # Only store meaningful text responses
                         if "serverContent" in response:
                             content = response["serverContent"]
-                            if "modelTurn" in content:
+                            if "modelTurn" in content and "text" in str(content["modelTurn"]):
+                                print(f"[Memory] Storing response for client {client_id}")
                                 memory_db.store_memory(
                                     client_id,
                                     json.dumps(content["modelTurn"]),

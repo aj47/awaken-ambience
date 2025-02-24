@@ -21,6 +21,7 @@ class MemoryDB:
             conn.commit()
 
     def store_memory(self, client_id: str, content: str, type: str = "conversation"):
+        print(f"[MemoryDB] Storing {type} memory for client {client_id[:8]}...")
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 "INSERT INTO memories (client_id, content, type) VALUES (?, ?, ?)",
