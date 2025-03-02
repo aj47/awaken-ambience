@@ -1,15 +1,16 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Mic, StopCircle, Video, Monitor } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
 import { base64ToFloat32Array, float32ToPcm16 } from '@/lib/utils';
+
+// Import our new components
+import SettingsPanel from './settings-panel';
+import AudioStatus from './audio-status';
+import VideoDisplay from './video-display';
+import WakeWordIndicator from './wake-word-indicator';
+import WakeWordDebug from './wake-word-debug';
+import ControlButtons from './control-buttons';
 
 interface Config {
   systemPrompt: string;
@@ -581,7 +582,14 @@ export default function GeminiVoiceChat() {
   return (
     <div className="container mx-auto py-8 px-4 sm:px-6 md:px-8">
       <div className="space-y-6">
-        <h1 className="text-4xl font-bold tracking-tight">Gemini 2.0 Realtime Playground ✨</h1>
+        <div className="flex justify-between items-center">
+          <h1 className="text-4xl font-bold tracking-tight">Gemini 2.0 Realtime Playground ✨</h1>
+          <SettingsPanel 
+            config={config} 
+            setConfig={setConfig} 
+            isConnected={isConnected} 
+          />
+        </div>
         
         {error && (
           <Alert variant="destructive">
@@ -590,103 +598,11 @@ export default function GeminiVoiceChat() {
           </Alert>
         )}
 
-        <Card>
-          <CardContent className="pt-6 space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="system-prompt">System Prompt</Label>
-              <Textarea
-                id="system-prompt"
-                value={config.systemPrompt}
-                onChange={(e) => setConfig(prev => ({ ...prev, systemPrompt: e.target.value }))}
-                disabled={isConnected}
-                className="min-h-[100px]"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="voice-select">Voice</Label>
-              <Select
-                value={config.voice}
-                onValueChange={(value) => setConfig(prev => ({ ...prev, voice: value }))}
-                disabled={isConnected}
-              >
-                <SelectTrigger id="voice-select">
-                  <SelectValue placeholder="Select a voice" />
-                </SelectTrigger>
-                <SelectContent>
-                  {voices.map((voice) => (
-                    <SelectItem key={voice} value={voice}>
-                      {voice}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="google-search"
-                checked={config.googleSearch}
-                onCheckedChange={(checked) => 
-                  setConfig(prev => ({ ...prev, googleSearch: checked as boolean }))}
-                disabled={isConnected}
-              />
-              <Label htmlFor="google-search">Enable Google Search</Label>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="allow-interruptions"
-                checked={config.allowInterruptions}
-                onCheckedChange={(checked) =>
-                  setConfig(prev => ({ ...prev, allowInterruptions: checked as boolean }))
-                }
-                disabled={isConnected}
-              />
-              <Label htmlFor="allow-interruptions">Allow Interruptions</Label>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="wake-word-enabled"
-                checked={config.isWakeWordEnabled}
-                onCheckedChange={(checked) => 
-                  setConfig(prev => ({ ...prev, isWakeWordEnabled: checked as boolean }))}
-                disabled={isConnected}
-              />
-              <Label htmlFor="wake-word-enabled">Enable Wake Word</Label>
-            </div>
-
-            {config.isWakeWordEnabled && (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="wake-word">Wake Word</Label>
-                  <Textarea
-                    id="wake-word"
-                    value={config.wakeWord}
-                    onChange={(e) => setConfig(prev => ({ ...prev, wakeWord: e.target.value }))}
-                    disabled={isConnected}
-                    className="min-h-[40px]"
-                    placeholder="Enter wake word phrase"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="cancel-phrase">Cancel Phrase</Label>
-                  <Textarea
-                    id="cancel-phrase"
-                    value={config.cancelPhrase}
-                    onChange={(e) => setConfig(prev => ({ ...prev, cancelPhrase: e.target.value }))}
-                    disabled={isConnected}
-                    className="min-h-[40px]"
-                    placeholder="Enter cancellation phrase"
-                  />
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        <div className="flex flex-wrap gap-4 justify-center">
+        <ControlButtons 
+          isStreaming={isStreaming} 
+          startStream={startStream} 
+          stopStream={stopStream} 
+        />
           {!isStreaming && (
             <>
             <Button
@@ -735,97 +651,29 @@ export default function GeminiVoiceChat() {
         </div>
 
         {isStreaming && (
-          <Card>
-            <CardContent className="flex items-center justify-center h-24 mt-6">
-              <div className="flex flex-col items-center gap-2">
-                <div className="relative">
-                  <Mic className={`h-8 w-8 ${isAudioSending ? 'text-green-500' : 'text-blue-500'} animate-pulse`} />
-                  {isAudioSending && (
-                    <span className="absolute -top-1 -right-1 h-3 w-3 bg-green-500 rounded-full">
-                      <span className="absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75 animate-ping" />
-                    </span>
-                  )}
-                </div>
-                <div className="flex flex-col items-center gap-1">
-                  <p className="text-gray-600">
-                    {config.isWakeWordEnabled && !wakeWordDetected 
-                      ? "Listening for wake word..."
-                      : "Listening to conversation..."}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {config.isWakeWordEnabled 
-                      ? wakeWordDetected 
-                        ? "Sending audio to Gemini..." 
-                        : "Waiting for wake word..."
-                      : isAudioSending 
-                        ? "Sending audio to Gemini..." 
-                        : "Audio paused"}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <AudioStatus 
+            isAudioSending={isAudioSending} 
+            isWakeWordEnabled={config.isWakeWordEnabled} 
+            wakeWordDetected={wakeWordDetected} 
+          />
         )}
 
         {(chatMode === 'video') && (
-          <Card>
-            <CardContent className="pt-6 space-y-4">
-              <div className="flex justify-between items-center">
-                <h2 className="text-lg font-semibold">Video Input</h2>
-              </div>
-              
-              <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="w-full h-auto object-contain"
-                  style={{ transform: videoSource === 'camera' ? 'scaleX(-1)' : 'none' }}
-                />
-                <canvas
-                  ref={canvasRef}
-                  className="hidden"
-                  width={640}
-                  height={480}
-                />
-              </div>
-            </CardContent>
-          </Card>
+          <VideoDisplay 
+            videoRef={videoRef} 
+            canvasRef={canvasRef} 
+            videoSource={videoSource} 
+          />
         )}
 
-        {wakeWordDetected && (
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-2 text-green-600">
-                <span className="relative flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
-                </span>
-                Wake word detected! Listening to conversation...
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        <WakeWordIndicator wakeWordDetected={wakeWordDetected} />
 
         {config.isWakeWordEnabled && (
-          <Card>
-            <CardContent className="pt-6 space-y-4">
-              <h2 className="text-lg font-semibold">Wake Word Debug</h2>
-              <div className="text-sm text-muted-foreground">
-                <p>Listening for: <strong>{config.wakeWord.toLowerCase()}</strong></p>
-                <p className="mt-2">Current transcript:</p>
-                <div className="p-2 bg-gray-50 rounded-md min-h-[40px]">
-                  {isStreaming ? wakeWordTranscript : 'Start chat to begin listening...'}
-                </div>
-                {isStreaming && (
-                  <p className="text-xs text-yellow-600 mt-2">
-                    Note: Transcript may be limited while streaming due to browser microphone constraints
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+          <WakeWordDebug 
+            isStreaming={isStreaming} 
+            wakeWordTranscript={wakeWordTranscript} 
+            wakeWord={config.wakeWord} 
+          />
         )}
 
       </div>
