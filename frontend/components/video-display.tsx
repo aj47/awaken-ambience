@@ -14,10 +14,10 @@ export default function VideoDisplay({ videoRef, canvasRef, videoSource }: Video
     <Card>
       <CardContent className="pt-6 space-y-4">
         <div className="flex justify-between items-center">
-          <h2 className="text-lg font-semibold">Video Input</h2>
+          <h2 className="text-lg font-semibold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-indigo-300">Visual Input</h2>
         </div>
         
-        <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
+        <div className="relative aspect-video bg-indigo-950 rounded-lg overflow-hidden border border-indigo-800/50 shadow-inner">
           <video
             ref={videoRef}
             autoPlay

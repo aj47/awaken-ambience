@@ -41,10 +41,10 @@ export default function SettingsPanel({ config, setConfig, isConnected }: Settin
       </Button>
 
       {isOpen && (
-        <Card className="mt-12">
+        <Card className="mt-12 z-20">
           <CardContent className="pt-6 space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="system-prompt">System Prompt</Label>
+              <Label htmlFor="system-prompt" className="text-indigo-200">Ambience Prompt</Label>
               <Textarea
                 id="system-prompt"
                 value={config.systemPrompt}
@@ -55,7 +55,7 @@ export default function SettingsPanel({ config, setConfig, isConnected }: Settin
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="voice-select">Voice</Label>
+              <Label htmlFor="voice-select" className="text-indigo-200">Voice</Label>
               <Select
                 value={config.voice}
                 onValueChange={(value) => setConfig(prev => ({ ...prev, voice: value }))}
@@ -82,7 +82,7 @@ export default function SettingsPanel({ config, setConfig, isConnected }: Settin
                   setConfig(prev => ({ ...prev, googleSearch: checked as boolean }))}
                 disabled={isConnected}
               />
-              <Label htmlFor="google-search">Enable Google Search</Label>
+              <Label htmlFor="google-search" className="text-indigo-200">Enable Google Search</Label>
             </div>
 
             <div className="flex items-center space-x-2">
@@ -94,7 +94,7 @@ export default function SettingsPanel({ config, setConfig, isConnected }: Settin
                 }
                 disabled={isConnected}
               />
-              <Label htmlFor="allow-interruptions">Allow Interruptions</Label>
+              <Label htmlFor="allow-interruptions" className="text-indigo-200">Allow Interruptions</Label>
             </div>
 
             <div className="flex items-center space-x-2">
@@ -105,13 +105,13 @@ export default function SettingsPanel({ config, setConfig, isConnected }: Settin
                   setConfig(prev => ({ ...prev, isWakeWordEnabled: checked as boolean }))}
                 disabled={isConnected}
               />
-              <Label htmlFor="wake-word-enabled">Enable Wake Word</Label>
+              <Label htmlFor="wake-word-enabled" className="text-indigo-200">Enable Wake Word</Label>
             </div>
 
             {config.isWakeWordEnabled && (
               <>
                 <div className="space-y-2">
-                  <Label htmlFor="wake-word">Wake Word</Label>
+                  <Label htmlFor="wake-word" className="text-indigo-200">Wake Word</Label>
                   <Textarea
                     id="wake-word"
                     value={config.wakeWord}
@@ -122,7 +122,7 @@ export default function SettingsPanel({ config, setConfig, isConnected }: Settin
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="cancel-phrase">Cancel Phrase</Label>
+                  <Label htmlFor="cancel-phrase" className="text-indigo-200">Cancel Phrase</Label>
                   <Textarea
                     id="cancel-phrase"
                     value={config.cancelPhrase}

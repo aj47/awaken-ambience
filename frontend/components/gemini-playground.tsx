@@ -29,13 +29,13 @@ export default function GeminiPlayground() {
   const [error, setError] = useState(null);
   const [isAudioSending, setIsAudioSending] = useState(false);
   const [config, setConfig] = useState<Config>({
-    systemPrompt: "You are a friendly Gemini 2.0 model. Respond verbally in a casual, helpful tone.",
+    systemPrompt: "You are Awaken Ambience, a cosmic AI assistant. Respond verbally in a calm, ethereal tone with wisdom and insight.",
     voice: "Puck",
     googleSearch: true,
     allowInterruptions: false,
     isWakeWordEnabled: false,
-    wakeWord: "Gemini",
-    cancelPhrase: "stop"
+    wakeWord: "Ambience",
+    cancelPhrase: "silence"
   });
   
   const [wakeWordDetected, setWakeWordDetected] = useState(false);
@@ -585,9 +585,10 @@ export default function GeminiPlayground() {
 
   return (
     <div className="container mx-auto py-8 px-4 sm:px-6 md:px-8">
-      <div className="space-y-6">
+      <div className="space-y-6 relative z-10">
+        <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/40 via-purple-900/20 to-transparent rounded-3xl blur-xl"></div>
         <div className="flex justify-between items-center">
-          <h1 className="text-4xl font-bold tracking-tight">Gemini 2.0 Realtime Playground ✨</h1>
+          <h1 className="text-4xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-pink-500 to-indigo-400 glow-text">Awaken Ambience ✨</h1>
           <SettingsPanel 
             config={config} 
             setConfig={setConfig} 
