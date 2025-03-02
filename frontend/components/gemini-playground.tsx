@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import { Mic, StopCircle, Video, Monitor } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { base64ToFloat32Array, float32ToPcm16 } from '@/lib/utils';
 
 // Import our new components
@@ -22,7 +24,7 @@ interface Config {
   cancelPhrase: string;
 }
 
-export default function GeminiVoiceChat() {
+export default function GeminiPlayground() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState(null);
   const [isAudioSending, setIsAudioSending] = useState(false);
@@ -420,7 +422,9 @@ export default function GeminiVoiceChat() {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      stopVideo();
+      if (videoStreamRef.current) {
+        videoStreamRef.current.getTracks().forEach(track => track.stop());
+      }
       stopStream();
       
       // Clean up audio context
@@ -603,52 +607,6 @@ export default function GeminiVoiceChat() {
           startStream={startStream} 
           stopStream={stopStream} 
         />
-          {!isStreaming && (
-            <>
-            <Button
-              onClick={() => startStream('audio')}
-              disabled={isStreaming}
-              className="gap-2"
-          >
-            <Mic className="h-4 w-4" />
-            Start Chatting
-          </Button>
-
-          <Button
-            onClick={() => startStream('camera')}
-            disabled={isStreaming}
-            className="gap-2"
-          >
-            <Video className="h-4 w-4" />
-              Start Chatting with Video
-            </Button>
-          
-          <Button
-            onClick={() => startStream('screen')}
-            disabled={isStreaming}
-            className="gap-2"
-          >
-            <Monitor className="h-4 w-4" />
-              Start Chatting with Screen
-            </Button>
-          </>
-
-            
-          )}
-
-          {isStreaming && (
-            <>
-              <Button
-                onClick={stopStream}
-                variant="destructive"
-                className="gap-2"
-              >
-                <StopCircle className="h-4 w-4" />
-                Stop Chat
-              </Button>
-            </>
-          )}
-        </div>
 
         {isStreaming && (
           <AudioStatus 
