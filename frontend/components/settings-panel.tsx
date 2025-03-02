@@ -25,7 +25,7 @@ interface SettingsPanelProps {
   isConnected: boolean;
 }
 
-export default function SettingsPanel({ config, setConfig, isConnected }: SettingsPanelProps) {
+export default function SettingsPanel({ config, setConfig, isConnected }: SettingsPanelProps): JSX.Element {
   const [isOpen, setIsOpen] = React.useState(false);
   const voices = ["Puck", "Charon", "Kore", "Fenrir", "Aoede"];
 
@@ -135,7 +135,6 @@ export default function SettingsPanel({ config, setConfig, isConnected }: Settin
                 </div>
               </>
             )}
-          </CardContent>
             </CardContent>
           </Card>
         </div>
