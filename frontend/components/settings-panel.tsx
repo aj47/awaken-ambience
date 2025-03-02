@@ -41,8 +41,9 @@ export default function SettingsPanel({ config, setConfig, isConnected }: Settin
       </Button>
 
       {isOpen && (
-        <Card className="mt-12 z-20">
-          <CardContent className="pt-6 space-y-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-20" onClick={() => setIsOpen(false)}>
+          <Card className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90vw] max-w-[1200px] h-[90vh] max-h-[800px] overflow-y-auto z-30" onClick={(e) => e.stopPropagation()}>
+            <CardContent className="pt-6 space-y-4">
             <div className="space-y-2">
               <Label htmlFor="system-prompt" className="text-indigo-200">Ambience Prompt</Label>
               <Textarea
@@ -135,7 +136,9 @@ export default function SettingsPanel({ config, setConfig, isConnected }: Settin
               </>
             )}
           </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   );
