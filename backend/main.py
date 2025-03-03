@@ -420,9 +420,9 @@ async def websocket_endpoint(websocket: WebSocket):
         print(f"WebSocket error: {e}")
     finally:
         # Cleanup
-        if client_id in connections:
-            await connections[client_id].close()
-            del connections[client_id]
+        if websocket.client in connections:
+            await connections[websocket.client].close()
+            del connections[websocket.client]
 
 @app.get("/memories")
 async def get_memories():
