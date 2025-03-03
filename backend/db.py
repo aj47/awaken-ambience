@@ -48,7 +48,7 @@ class MemoryDB:
         print("[MemoryDB] Fetching all memories...")
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute(
-                "SELECT content, timestamp FROM memories ORDER BY timestamp DESC"
+                "SELECT id, content, timestamp, type FROM memories ORDER BY timestamp DESC"
             )
             memories = cursor.fetchall()
             print(f"[MemoryDB] Found {len(memories)} memories")
@@ -116,3 +116,21 @@ class MemoryDB:
             )
             conn.commit()
             print(f"[MemoryDB] Updated memory ID {memory_id}")
+    def get_memory(self, memory_id: int):
+        """Retrieves a specific memory by ID.
+        
+        Args:
+            memory_id: The ID of the memory to retrieve
+        """
+        print(f"[MemoryDB] Fetching memory ID {memory_id}...")
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                "SELECT id, content, timestamp, type FROM memories WHERE id = ?",
+                (memory_id,)
+            )
+            memory = cursor.fetchone()
+            if memory:
+                print(f"[MemoryDB] Found memory: {memory[1][:100]}...")
+            else:
+                print(f"[MemoryDB] Memory ID {memory_id} not found")
+            return memory

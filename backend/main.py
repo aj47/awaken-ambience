@@ -432,13 +432,29 @@ async def get_memories():
         memories = memory_db.get_all_memories()
         return [
             {
-                "id": i,
-                "content": memory[0],
-                "timestamp": memory[1],
-                "type": "conversation"
+                "id": memory[0],  # Assuming first column is id
+                "content": memory[1],
+                "timestamp": memory[2],
+                "type": memory[3]
             }
-            for i, memory in enumerate(memories)
+            for memory in memories
         ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/memories/{memory_id}")
+async def get_memory(memory_id: int):
+    """Get a specific memory by ID"""
+    try:
+        memory = memory_db.get_memory(memory_id)
+        if not memory:
+            raise HTTPException(status_code=404, detail="Memory not found")
+        return {
+            "id": memory[0],
+            "content": memory[1],
+            "timestamp": memory[2],
+            "type": memory[3]
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
