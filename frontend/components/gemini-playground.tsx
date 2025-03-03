@@ -13,6 +13,7 @@ import VideoDisplay from './video-display';
 import WakeWordIndicator from './wake-word-indicator';
 import WakeWordDebug from './wake-word-debug';
 import ControlButtons from './control-buttons';
+import MemoryPanel from './memory-panel';
 
 interface Config {
   systemPrompt: string;
@@ -589,11 +590,17 @@ export default function GeminiPlayground() {
         <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/40 via-purple-900/20 to-transparent rounded-3xl blur-xl"></div>
         <div className="flex justify-between items-center">
           <h1 className="text-4xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-pink-500 to-indigo-400 glow-text">Awaken Ambience ✨</h1>
-          <SettingsPanel 
-            config={config} 
-            setConfig={setConfig} 
-            isConnected={isConnected} 
-          />
+          <div className="flex items-center space-x-2">
+            <MemoryPanel
+              clientId={clientId.current}
+              isConnected={isConnected}
+            />
+            <SettingsPanel 
+              config={config} 
+              setConfig={setConfig} 
+              isConnected={isConnected} 
+            />
+          </div>
         </div>
         
         {error && (

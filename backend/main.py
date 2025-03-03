@@ -425,6 +425,32 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
             await connections[client_id].close()
             del connections[client_id]
 
+@app.get("/memories/{client_id}")
+async def get_memories(client_id: str):
+    """Get all memories for a client"""
+    try:
+        memories = memory_db.get_all_memories(client_id)
+        return [
+            {
+                "id": i,
+                "content": memory[0],
+                "timestamp": memory[1],
+                "type": "conversation"
+            }
+            for i, memory in enumerate(memories)
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/memories/{memory_id}")
+async def delete_memory(memory_id: int):
+    """Delete a specific memory"""
+    try:
+        memory_db.delete_memory(memory_id)
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
