@@ -51,14 +51,15 @@ class MemoryDB:
         """
         print(f"[MemoryDB] Fetching all memories for client {client_id or 'all'}...")
         with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row  # Return rows as dictionaries
             cursor = conn.execute(
                 "SELECT id, content, timestamp, type FROM memories ORDER BY timestamp DESC"
             )
             memories = cursor.fetchall()
             print(f"[MemoryDB] Found {len(memories)} memories")
             for i, memory in enumerate(memories, 1):
-                print(f"[MemoryDB] Memory {i}: {memory[0][:100]}... ({memory[1]})")
-            return memories
+                print(f"[MemoryDB] Memory {i}: {memory['content'][:100]}... ({memory['timestamp']})")
+            return [dict(memory) for memory in memories]  # Convert to list of dictionaries
 
     def get_recent_memories(self, limit: int = 5):
         """Retrieves recent memories from the database.

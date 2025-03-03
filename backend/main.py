@@ -428,15 +428,7 @@ async def get_memories():
     """Get all memories"""
     try:
         memories = memory_db.get_all_memories()
-        return [
-            {
-                "id": memory[0],  # Assuming first column is id
-                "content": memory[1],
-                "timestamp": memory[2],
-                "type": memory[3]
-            }
-            for memory in memories
-        ]
+        return memories
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
