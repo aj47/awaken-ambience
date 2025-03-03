@@ -19,14 +19,14 @@ class MemoryDB:
             """)
             conn.commit()
 
-    def store_memory(self, content: str, context: str = None, tags: list = None, type: str = "conversation"):
+    def store_memory(self, content: str, type: str = "conversation", context: str = None, tags: list = None):
         """Stores a memory in the database.
         
         Args:
             content: The main content of the memory
+            type: The type of memory (default: conversation)
             context: Optional context about the memory
             tags: Optional list of tags to categorize the memory
-            type: The type of memory (default: conversation)
         """
         print(f"[MemoryDB] Storing {type} memory...")
         print(f"[MemoryDB] Content preview: {content[:100]}...")

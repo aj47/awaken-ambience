@@ -180,11 +180,10 @@ class GeminiConnection:
             args = f.get("args", {})
             if func_name == "store_memory":
                 result = self.memory_db.store_memory(
-                    args.get("client_id", ""),
-                    args.get("content", ""),
-                    args.get("context", ""),
-                    args.get("tags", []),
-                    args.get("type", "")
+                    content=args.get("content", ""),
+                    type=args.get("type", "conversation"),
+                    context=args.get("context", ""),
+                    tags=args.get("tags", [])
                 )
                 response_text = f"Stored memory: {args.get('content', '')[:50]}..."
             elif func_name == "get_recent_memories":
