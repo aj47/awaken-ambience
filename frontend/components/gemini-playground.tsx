@@ -538,7 +538,7 @@ export default function GeminiPlayground() {
             // Force reconnection if needed
             if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
               console.log("Reconnecting WebSocket after wake word detection");
-              const ws = new WebSocket(`ws://localhost:8000/ws/${clientId.current}`);
+              const ws = new WebSocket(`ws://localhost:8000/ws`);
               ws.onopen = async () => {
                 ws.send(JSON.stringify({ type: 'config', config: config }));
                 setIsStreaming(true);
