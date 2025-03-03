@@ -43,9 +43,13 @@ class MemoryDB:
             conn.commit()
         print(f"[MemoryDB] Successfully stored memory")
 
-    def get_all_memories(self):
-        """Retrieves all memories from the database."""
-        print("[MemoryDB] Fetching all memories...")
+    def get_all_memories(self, client_id=None):
+        """Retrieves all memories from the database.
+        
+        Args:
+            client_id: Optional client identifier to filter memories
+        """
+        print(f"[MemoryDB] Fetching all memories for client {client_id or 'all'}...")
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute(
                 "SELECT id, content, timestamp, type FROM memories ORDER BY timestamp DESC"
