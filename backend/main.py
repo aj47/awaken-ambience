@@ -425,11 +425,11 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
             await connections[client_id].close()
             del connections[client_id]
 
-@app.get("/memories/{client_id}")
-async def get_memories(client_id: str):
-    """Get all memories for a client"""
+@app.get("/memories")
+async def get_memories():
+    """Get all memories"""
     try:
-        memories = memory_db.get_all_memories(client_id)
+        memories = memory_db.get_all_memories()
         return [
             {
                 "id": i,

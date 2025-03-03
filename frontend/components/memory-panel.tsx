@@ -14,18 +14,17 @@ interface Memory {
 }
 
 interface MemoryPanelProps {
-  clientId: string;
   isConnected: boolean;
 }
 
-export default function MemoryPanel({ clientId, isConnected }: MemoryPanelProps): JSX.Element {
+export default function MemoryPanel({ isConnected }: MemoryPanelProps): JSX.Element {
   const [isOpen, setIsOpen] = useState(false);
   const [memories, setMemories] = useState<Memory[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const fetchMemories = async () => {
     try {
-      const response = await fetch(`http://localhost:8000/memories/${clientId}`);
+      const response = await fetch('http://localhost:8000/memories');
       if (!response.ok) throw new Error('Failed to fetch memories');
       const data = await response.json();
       setMemories(data);
