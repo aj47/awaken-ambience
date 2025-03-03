@@ -75,7 +75,6 @@ export default function GeminiPlayground() {
   const wsRef = useRef(null);
   const audioContextRef = useRef(null);
   const audioInputRef = useRef(null);
-  const clientId = useRef(crypto.randomUUID());
   const wakeWordDetectedRef = useRef(false);
   const [videoEnabled, setVideoEnabled] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -98,7 +97,7 @@ export default function GeminiPlayground() {
       setChatMode('audio');
     }
 
-    wsRef.current = new WebSocket(`ws://localhost:8000/ws/${clientId.current}`);
+    wsRef.current = new WebSocket(`ws://localhost:8000/ws`);
     
     wsRef.current.onopen = async () => {
       wsRef.current.send(JSON.stringify({
@@ -161,7 +160,7 @@ export default function GeminiPlayground() {
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
           if (Date.now() - lastWsConnectionAttemptRef.current > 1000) {
             console.log("Reestablishing websocket connection...");
-            const ws = new WebSocket(`ws://localhost:8000/ws/${clientId.current}`);
+            const ws = new WebSocket(`ws://localhost:8000/ws`);
             ws.onopen = async () => {
               ws.send(JSON.stringify({
                 type: 'config',
@@ -592,7 +591,6 @@ export default function GeminiPlayground() {
           <h1 className="text-4xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-pink-500 to-indigo-400 glow-text">Awaken Ambience ✨</h1>
           <div className="flex items-center space-x-2">
             <MemoryPanel
-              clientId={clientId.current}
               isConnected={isConnected}
             />
             <SettingsPanel 

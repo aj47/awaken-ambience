@@ -53,7 +53,7 @@ export default function MemoryPanel({ isConnected }: MemoryPanelProps): JSX.Elem
     if (isOpen) {
       fetchMemories();
     }
-  }, [isOpen, clientId]);
+  }, [isOpen]);
 
   return (
     <div className="relative">

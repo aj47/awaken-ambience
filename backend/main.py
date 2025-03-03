@@ -263,15 +263,15 @@ class GeminiConnection:
 connections: Dict[str, GeminiConnection] = {}
 memory_db = MemoryDB()
 
-@app.websocket("/ws/{client_id}")
-async def websocket_endpoint(websocket: WebSocket, client_id: str):
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     
     try:
         
         # Create new Gemini connection for this client
         gemini = GeminiConnection()
-        connections[client_id] = gemini
+        connections[websocket.client] = gemini
         
         # Wait for initial configuration
         config_data = await websocket.receive_json()
@@ -301,7 +301,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                             if gemini.interrupted:
                                 gemini.interrupted = False  # Resume with a new generation if audio arrives after an interrupt
                             if not gemini.ws:
-                                print(f"[Client {client_id}] Gemini connection is closed. Reconnecting...")
+                                print("Gemini connection is closed. Reconnecting...")
                                 await gemini.connect()
                             
                             # Skip storing raw audio messages
@@ -311,7 +311,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                         elif msg_type == "image":
                             await gemini.send_image(message_content["data"])
                         elif msg_type == "interrupt":
-                            print(f"[Client {client_id}] Received interrupt command from client, canceling current Gemini generation.")
+                            print("Received interrupt command from client, canceling current Gemini generation.")
                             gemini.interrupted = True  # Mark the current generation as canceled
                             await websocket.send_json({
                                 "type": "interrupt",
@@ -354,11 +354,10 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                         if "serverContent" in response:
                             content = response["serverContent"]
                             if "modelTurn" in content and "text" in str(content["modelTurn"]):
-                                print(f"[Memory] Storing response for client {client_id}")
+                                print("[Memory] Storing response")
                                 memory_db.store_memory(
-                                    client_id,
                                     json.dumps(content["modelTurn"]),
-                                    "response"
+                                    type="response"
                                 )
                     except Exception as ex:
                         print(f"Gemini receive error: {ex}")
