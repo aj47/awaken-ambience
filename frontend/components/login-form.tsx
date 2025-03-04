@@ -26,7 +26,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ onLogin }) => {
       formData.append('username', username);
       formData.append('password', password);
       
-      const response = await fetch('http://54.158.95.38:8000/token', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/token`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded'

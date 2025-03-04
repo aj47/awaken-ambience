@@ -103,7 +103,7 @@ export default function GeminiPlayground() {
       return;
     }
     
-    wsRef.current = new WebSocket(`ws://54.158.95.38:8000/ws?token=${token}`);
+    wsRef.current = new WebSocket(`${process.env.NEXT_PUBLIC_API_URL.replace('http', 'ws')}/ws?token=${token}`);
     
     wsRef.current.onopen = async () => {
       wsRef.current.send(JSON.stringify({
@@ -180,7 +180,7 @@ export default function GeminiPlayground() {
               stopStream();
               return;
             }
-            const ws = new WebSocket(`ws://54.158.95.38:8000/ws?token=${encodeURIComponent(token)}`);
+            const ws = new WebSocket(`${process.env.NEXT_PUBLIC_API_URL.replace('http', 'ws')}/ws?token=${encodeURIComponent(token)}`);
             ws.onopen = async () => {
               ws.send(JSON.stringify({
                 type: 'config',

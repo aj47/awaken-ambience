@@ -24,7 +24,7 @@ export default function MemoryPanel({ isConnected }: MemoryPanelProps): JSX.Elem
 
   const fetchMemories = async () => {
     try {
-      const response = await fetch('http://54.158.95.38:8000/memories');
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/memories`);
       if (!response.ok) throw new Error('Failed to fetch memories');
       const data = await response.json();
       setMemories(data);
@@ -37,7 +37,7 @@ export default function MemoryPanel({ isConnected }: MemoryPanelProps): JSX.Elem
 
   const deleteMemory = async (id: number) => {
     try {
-      const response = await fetch(`http://54.158.95.38:8000/memories/${id}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/memories/${id}`, {
         method: 'DELETE',
       });
       if (!response.ok) throw new Error('Failed to delete memory');
