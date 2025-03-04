@@ -43,7 +43,7 @@ async def get_current_user_websocket(websocket: WebSocket) -> Optional[str]:
     return username
 
 def authenticate_user(db, username: str, password: str):
-    user = db.get_user(username)
+    user = db.get(username)
     if not user or not verify_password(password, user.hashed_password):
         return False
     return user
