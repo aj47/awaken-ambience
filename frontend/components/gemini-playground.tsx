@@ -174,7 +174,13 @@ export default function GeminiPlayground() {
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
           if (Date.now() - lastWsConnectionAttemptRef.current > 1000) {
             console.log("Reestablishing websocket connection...");
-            const ws = new WebSocket(`ws://localhost:8000/ws`);
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+              setError('Authentication required. Please log in again.');
+              stopStream();
+              return;
+            }
+            const ws = new WebSocket(`ws://localhost:8000/ws?token=${encodeURIComponent(token)}`);
             ws.onopen = async () => {
               ws.send(JSON.stringify({
                 type: 'config',
@@ -467,10 +473,15 @@ export default function GeminiPlayground() {
       recognition.onend = (event) => {
         console.log("Speech recognition ended", event);
         // Restart recognition if streaming is active (helps capture interrupts even when Gemini is talking)
-        if (isStreaming) {
+        if (isStreaming && recognitionRef.current === recognition) {
           try {
-            recognition.start();
-            console.log("Speech recognition restarted");
+            // Add a small delay to prevent rapid restart loops
+            setTimeout(() => {
+              if (isStreaming && recognitionRef.current === recognition) {
+                recognition.start();
+                console.log("Speech recognition restarted");
+              }
+            }, 300);
           } catch (err) {
             console.log("Failed to restart speech recognition:", err);
           }
@@ -552,7 +563,13 @@ export default function GeminiPlayground() {
             // Force reconnection if needed
             if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
               console.log("Reconnecting WebSocket after wake word detection");
-              const ws = new WebSocket(`ws://localhost:8000/ws`);
+              const token = localStorage.getItem('authToken');
+              if (!token) {
+                setError('Authentication required. Please log in again.');
+                stopStream();
+                return;
+              }
+              const ws = new WebSocket(`ws://localhost:8000/ws?token=${encodeURIComponent(token)}`);
               ws.onopen = async () => {
                 ws.send(JSON.stringify({ type: 'config', config: config }));
                 setIsStreaming(true);
@@ -569,12 +586,6 @@ export default function GeminiPlayground() {
             // Retain the transcript for debugging
             setWakeWordTranscript(transcript);
           }
-        }
-      };
-
-      recognition.onerror = (event) => {
-        if (event.error === 'not-allowed' || event.error === 'audio-capture') {
-          setError('Microphone already in use - disable wake word to continue');
         }
       };
 

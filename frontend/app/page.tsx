@@ -22,8 +22,10 @@ export default function Home() {
   };
 
   const handleLogout = () => {
+    // Force page reload after logout to ensure clean state
     localStorage.removeItem('authToken');
     setToken(null);
+    window.location.reload();
   };
 
   if (loading) {
