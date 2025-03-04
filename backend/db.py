@@ -1,6 +1,7 @@
 import sqlite3
 from datetime import datetime
 import json
+from security import get_password_hash
 
 class MemoryDB:
     def __init__(self, db_path="memories.db"):
@@ -9,21 +10,24 @@ class MemoryDB:
 
     def init_db(self):
         with sqlite3.connect(self.db_path) as conn:
+            # Create memories table
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS memories (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     content TEXT NOT NULL,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                     type TEXT NOT NULL
-                );
+                )""")
+            
+            # Create users table
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     username TEXT UNIQUE NOT NULL,
                     hashed_password TEXT NOT NULL,
                     is_active BOOLEAN DEFAULT TRUE,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
+                )""")
             conn.commit()
 
     def store_memory(self, content: str, type: str = "conversation", context: str = None, tags: list = None):
