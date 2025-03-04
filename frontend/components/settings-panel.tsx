@@ -25,7 +25,7 @@ interface SettingsPanelProps {
   isConnected: boolean;
 }
 
-export default function SettingsPanel({ config, setConfig, isConnected }: SettingsPanelProps): JSX.Element {
+export default function SettingsPanel({ config, setConfig, isConnected }: SettingsPanelProps): React.JSX.Element {
   const [isOpen, setIsOpen] = React.useState(false);
   const voices = ["Puck", "Charon", "Kore", "Fenrir", "Aoede"];
 
@@ -136,6 +136,21 @@ export default function SettingsPanel({ config, setConfig, isConnected }: Settin
               </>
             )}
             </CardContent>
+            
+            <div className="flex justify-end gap-4 p-6 border-t">
+              <Button 
+                variant="secondary" 
+                onClick={() => setIsOpen(false)}
+              >
+                Exit Without Saving
+              </Button>
+              <Button 
+                onClick={() => setIsOpen(false)}
+                disabled={isConnected}
+              >
+                Save Changes
+              </Button>
+            </div>
           </Card>
         </div>
       )}
