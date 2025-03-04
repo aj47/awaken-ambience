@@ -97,8 +97,12 @@ export default function GeminiPlayground() {
       setChatMode('audio');
     }
 
-    // In real implementation, get token from your auth context
-    const token = localStorage.getItem('authToken'); 
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      setError('Authentication required. Please log in again.');
+      return;
+    }
+    
     wsRef.current = new WebSocket(`ws://localhost:8000/ws?token=${token}`);
     
     wsRef.current.onopen = async () => {
@@ -133,6 +137,14 @@ export default function GeminiPlayground() {
 
     wsRef.current.onclose = (event) => {
       setIsStreaming(false);
+      // Check if the close was due to authentication failure
+      if (event.code === 1008) {
+        setError('Authentication failed. Please log out and log in again.');
+        // Clear the invalid token
+        localStorage.removeItem('authToken');
+        // Force page reload to show login screen
+        window.location.reload();
+      }
     };
   };
 
