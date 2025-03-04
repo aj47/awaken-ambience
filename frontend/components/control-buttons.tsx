@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 
 interface ControlButtonsProps {
   isStreaming: boolean;
-  startStream: (mode: 'audio' | 'camera' | 'screen') => Promise<void>;
+  startStream: (mode: 'audio' | 'camera' | 'screen' | 'camera-reverse') => Promise<void>;
   stopStream: () => void;
 }
 
@@ -40,6 +40,15 @@ export default function ControlButtons({ isStreaming, startStream, stopStream }:
           >
             <Monitor className="h-4 w-4" />
             Start Chatting with Screen
+          </Button>
+
+          <Button
+            onClick={() => startStream('camera-reverse')}
+            disabled={isStreaming}
+            className="gap-2"
+          >
+            <Video className="h-4 w-4" />
+            Start Chatting with Rear Camera
           </Button>
         </>
       )}
