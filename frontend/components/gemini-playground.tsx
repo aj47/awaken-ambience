@@ -30,7 +30,7 @@ export default function GeminiPlayground() {
   const [error, setError] = useState(null);
   const [isAudioSending, setIsAudioSending] = useState(false);
   const [config, setConfig] = useState<Config>({
-    systemPrompt: "You are Awaken Ambience, a cosmic AI assistant. Respond verbally in a calm, ethereal tone with wisdom and insight.",
+    systemPrompt: "You are a friendly assistant",
     voice: "Puck",
     googleSearch: true,
     allowInterruptions: false,

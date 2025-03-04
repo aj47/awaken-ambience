@@ -19,7 +19,7 @@ app = FastAPI()
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Add your frontend URL
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -151,6 +151,7 @@ class GeminiConnection:
                             "text": self.config["systemPrompt"] + 
                             "\n\nHere are recent memories:\n" + memory_context +
                             "\n\nYou can also use the memory functions store_memory, get_recent_memories, and search_memories."
+                            "\n\nUse the memory function often."
                         }
                     ]
                 }
