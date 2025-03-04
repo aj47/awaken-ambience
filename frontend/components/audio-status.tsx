@@ -8,11 +8,12 @@ interface AudioStatusProps {
   isAudioSending: boolean;
   isWakeWordEnabled: boolean;
   wakeWordDetected: boolean;
+  mode: 'audio' | 'camera' | 'screen' | 'camera-reverse';
 }
 
-export default function AudioStatus({ isAudioSending, isWakeWordEnabled, wakeWordDetected }: AudioStatusProps) {
+export default function AudioStatus({ isAudioSending, isWakeWordEnabled, wakeWordDetected, mode }: AudioStatusProps) {
   return (
-    <Card>
+    <Card className={mode === 'camera' || mode === 'camera-reverse' ? 'hidden' : ''}>
       <CardContent className="flex items-center justify-center h-24 mt-6">
         <div className="flex flex-col items-center gap-2">
           <div className="relative">
