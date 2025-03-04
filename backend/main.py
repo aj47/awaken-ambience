@@ -1,7 +1,7 @@
 from fastapi import FastAPI, WebSocket, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from security import get_current_user_websocket, create_access_token, authenticate_user, get_password_hash
+from security import get_current_user_websocket, create_access_token, authenticate_user, get_password_hash, ACCESS_TOKEN_EXPIRE_MINUTES
 from typing import Annotated
 import asyncio
 import json
