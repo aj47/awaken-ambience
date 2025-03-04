@@ -1,0 +1,6 @@
+- [x] make reverse camera button
+- button to set up mic
+- make button to save / exit from settings menu
+- hide mic ui when in video mode
+- align icon better on smaller screens. should be vertically aligned
+- handle for Error processing client message: received 1011 (internal error) Request trace id: c86c744750512901, [ORIGINAL ERROR] RPC::DEADLINE_EXCEEDED: ; then sent 1011 (internal error) Request trace id: c86c744750512901, [ORIGINAL ERROR] RPC::DEADLINE_EXCEEDED:
