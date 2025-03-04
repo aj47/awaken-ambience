@@ -31,10 +31,35 @@ class MemoryDB:
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )""")
             conn.commit()
+            self.create_default_user()
+
+    def create_default_user(self):
+        """Creates a default admin user if it doesn't exist."""
+        default_username = "admin"
+        default_password = "admin"
+        default_config = {
+            "systemPrompt": "You are a friendly AI assistant.",
+            "voice": "Puck",
+            "googleSearch": True,
+            "allowInterruptions": True,
+            "isWakeWordEnabled": False,
+            "wakeWord": "",
+            "cancelPhrase": ""
+        }
+
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                "SELECT username FROM users WHERE username = ?",
+                (default_username,)
+            )
+            if cursor.fetchone() is None:
+                self.create_user(default_username, default_password)
+                self.update_user_config(default_username, default_config)
+                print(f"[MemoryDB] Created default user: {default_username}")
 
     def store_memory(self, content: str, username: str, type: str = "conversation", context: str = None, tags: list = None):
         """Stores a memory in the database.
-        
+
         Args:
             content: The main content of the memory
             username: The user associated
