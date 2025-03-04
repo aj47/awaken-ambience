@@ -63,7 +63,7 @@ class GeminiConnection:
             raise ValueError("Configuration must be set before connecting")
 
         # Get all memories and format them into the system prompt
-        memories = self.memory_db.get_all_memories()
+        memories = self.memory_db.get_all_memories(self.username)
         memory_context = "\n".join([f"- {memory[0]}" for memory in memories])
         
         # Send initial setup message with configuration
@@ -201,6 +201,7 @@ class GeminiConnection:
             if func_name == "store_memory":
                 result = self.memory_db.store_memory(
                     content=args.get("content", ""),
+                    username=self.username,
                     type=args.get("type", "conversation"),
                     context=args.get("context", ""),
                     tags=args.get("tags", [])
@@ -208,7 +209,7 @@ class GeminiConnection:
                 response_text = f"Stored memory: {args.get('content', '')[:50]}..."
             elif func_name == "get_recent_memories":
                 result = self.memory_db.get_recent_memories(
-                    args.get("client_id", ""),
+                    self.username,
                     args.get("limit", 5)
                 )
                 response_text = f"Here are your recent memories:\n"
@@ -216,7 +217,7 @@ class GeminiConnection:
                     response_text += f"{i}. {memory[0][:100]}...\n"
             elif func_name == "search_memories":
                 result = self.memory_db.search_memories(
-                    args.get("client_id", ""),
+                    self.username,
                     args.get("query", ""),
                     args.get("limit", 5)
                 )
@@ -224,12 +225,13 @@ class GeminiConnection:
                 for i, memory in enumerate(result, 1):
                     response_text += f"{i}. {memory[0][:100]}...\n"
             elif func_name == "delete_memory":
-                self.memory_db.delete_memory(args.get("memory_id"))
+                self.memory_db.delete_memory(args.get("memory_id"), self.username)
                 response_text = f"Successfully deleted memory ID {args.get('memory_id')}"
             elif func_name == "update_memory":
                 self.memory_db.update_memory(
                     args.get("memory_id"),
-                    args.get("new_content")
+                    args.get("new_content"),
+                    self.username
                 )
                 response_text = f"Successfully updated memory ID {args.get('memory_id')}"
             else:
@@ -308,19 +310,20 @@ async def websocket_endpoint(websocket: WebSocket):
         return
     
     try:
-        
-        # Create new Gemini connection for this client
         gemini = GeminiConnection()
+        gemini.username = username
         connections[websocket.client] = gemini
-        
+
         # Wait for initial configuration
         config_data = await websocket.receive_json()
         if config_data.get("type") != "config":
             raise ValueError("First message must be configuration")
         
-        # Set the configuration
-        gemini.set_config(config_data.get("config", {}))
-        
+        # Set the configuration and update it in the DB
+        const_config = config_data.get("config", {})
+        gemini.set_config(const_config)
+        memory_db.update_user_config(username, const_config)
+
         # Initialize Gemini connection
         await gemini.connect()
         
@@ -465,10 +468,10 @@ async def websocket_endpoint(websocket: WebSocket):
             del connections[websocket.client]
 
 @app.get("/memories")
-async def get_memories():
+async def get_memories(current_username: str = Depends(get_current_user_websocket)):
     """Get all memories"""
     try:
-        memories = memory_db.get_all_memories()
+        memories = memory_db.get_all_memories(current_username)
         return memories
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -490,10 +493,10 @@ async def get_memory(memory_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/memories/{memory_id}")
-async def delete_memory(memory_id: int):
+async def delete_memory(memory_id: int, current_username: str = Depends(get_current_user_websocket)):
     """Delete a specific memory"""
     try:
-        memory_db.delete_memory(memory_id)
+        memory_db.delete_memory(memory_id, current_username)
         return {"status": "success"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

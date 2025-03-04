@@ -16,25 +16,28 @@ class MemoryDB:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     content TEXT NOT NULL,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    type TEXT NOT NULL
+                    type TEXT NOT NULL,
+                    username TEXT NOT NULL
                 )""")
             
-            # Create users table
+            # Create users table – add config column to store JSON config
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     username TEXT UNIQUE NOT NULL,
                     hashed_password TEXT NOT NULL,
+                    config TEXT,
                     is_active BOOLEAN DEFAULT TRUE,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )""")
             conn.commit()
 
-    def store_memory(self, content: str, type: str = "conversation", context: str = None, tags: list = None):
+    def store_memory(self, content: str, username: str, type: str = "conversation", context: str = None, tags: list = None):
         """Stores a memory in the database.
         
         Args:
             content: The main content of the memory
+            username: The user associated
             type: The type of memory (default: conversation)
             context: Optional context about the memory
             tags: Optional list of tags to categorize the memory
@@ -48,65 +51,59 @@ class MemoryDB:
             
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
-                "INSERT INTO memories (content, type) VALUES (?, ?)",
-                (content, type)
+                "INSERT INTO memories (content, type, username) VALUES (?, ?, ?)",
+                (content, type, username)
             )
             conn.commit()
         print(f"[MemoryDB] Successfully stored memory")
 
-    def get_all_memories(self, client_id=None):
+    def get_all_memories(self, username: str):
         """Retrieves all memories from the database.
         
         Args:
-            client_id: Optional client identifier to filter memories
+            username: User identifier to filter memories
         """
-        print(f"[MemoryDB] Fetching all memories for client {client_id or 'all'}...")
+        print(f"[MemoryDB] Fetching all memories for user {username}...")
         with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row  # Return rows as dictionaries
+            conn.row_factory = sqlite3.Row
             cursor = conn.execute(
-                "SELECT id, content, timestamp, type FROM memories ORDER BY timestamp DESC"
+                "SELECT id, content, timestamp, type FROM memories WHERE username = ? ORDER BY timestamp DESC",
+                (username,)
             )
             memories = cursor.fetchall()
-            print(f"[MemoryDB] Found {len(memories)} memories")
-            for i, memory in enumerate(memories, 1):
-                print(f"[MemoryDB] Memory {i}: {memory['content'][:100]}... ({memory['timestamp']})")
-            return [dict(memory) for memory in memories]  # Convert to list of dictionaries
+            return [dict(memory) for memory in memories]
 
-    def get_recent_memories(self, limit: int = 5):
+    def get_recent_memories(self, username: str, limit: int = 5):
         """Retrieves recent memories from the database.
         
         Args:
+            username: User
             limit: Maximum number of memories to retrieve
         """
         print(f"[MemoryDB] Fetching {limit} recent memories...")
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute(
-                "SELECT content, timestamp FROM memories ORDER BY timestamp DESC LIMIT ?",
-                (limit,)
+                "SELECT content, timestamp FROM memories WHERE username = ? ORDER BY timestamp DESC LIMIT ?",
+                (username, limit)
             )
             memories = cursor.fetchall()
-            print(f"[MemoryDB] Found {len(memories)} memories")
-            for i, memory in enumerate(memories, 1):
-                print(f"[MemoryDB] Memory {i}: {memory[0][:100]}... ({memory[1]})")
             return memories
 
-    def search_memories(self, query: str, limit: int = 5):
+    def search_memories(self, username: str, query: str, limit: int = 5):
         """Searches memories by content.
         
         Args:
+            username: User
             query: Search term to look for in memory content
             limit: Maximum number of results to return
         """
         print(f"[MemoryDB] Searching memories with query: {query}")
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute(
-                "SELECT content, timestamp FROM memories WHERE content LIKE ? ORDER BY timestamp DESC LIMIT ?",
-                (f"%{query}%", limit)
+                "SELECT content, timestamp FROM memories WHERE username = ? AND content LIKE ? ORDER BY timestamp DESC LIMIT ?",
+                (username, f"%{query}%", limit)
             )
             memories = cursor.fetchall()
-            print(f"[MemoryDB] Found {len(memories)} matching memories")
-            for i, memory in enumerate(memories, 1):
-                print(f"[MemoryDB] Match {i}: {memory[0][:100]}... ({memory[1]})")
             return memories
 
     def clear_memories(self):
@@ -116,22 +113,20 @@ class MemoryDB:
             conn.commit()
             print("[MemoryDB] Cleared all memories")
 
-    def delete_memory(self, memory_id: int):
+    def delete_memory(self, memory_id: int, username: str):
         """Deletes a specific memory by ID"""
         with sqlite3.connect(self.db_path) as conn:
-            conn.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
+            conn.execute("DELETE FROM memories WHERE id = ? AND username = ?", (memory_id, username))
             conn.commit()
-            print(f"[MemoryDB] Deleted memory ID {memory_id}")
 
-    def update_memory(self, memory_id: int, new_content: str):
+    def update_memory(self, memory_id: int, new_content: str, username: str):
         """Updates the content of a specific memory"""
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
-                "UPDATE memories SET content = ? WHERE id = ?",
-                (new_content, memory_id)
+                "UPDATE memories SET content = ? WHERE id = ? AND username = ?",
+                (new_content, memory_id, username)
             )
             conn.commit()
-            print(f"[MemoryDB] Updated memory ID {memory_id}")
     def create_user(self, username: str, password: str):
         """Creates a new user with hashed password"""
         hashed_password = get_password_hash(password)
@@ -171,3 +166,28 @@ class MemoryDB:
             else:
                 print(f"[MemoryDB] Memory ID {memory_id} not found")
             return memory
+
+    def update_user_config(self, username: str, config: dict):
+        """Update the configuration for a user."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE users SET config = ? WHERE username = ?",
+                (json.dumps(config), username)
+            )
+            conn.commit()
+        print(f"[MemoryDB] Updated config for user {username}")
+
+    def get_user_config(self, username: str):
+        """Retrieve a user’s configuration."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                "SELECT config FROM users WHERE username = ?",
+                (username,)
+            )
+            row = cursor.fetchone()
+            if row and row[0]:
+                try:
+                    return json.loads(row[0])
+                except Exception as e:
+                    print(f"[MemoryDB] Error parsing config for user {username}: {e}")
+            return None
