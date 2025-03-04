@@ -1,9 +1,12 @@
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, WebSocket, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from security import get_current_user_websocket, create_access_token, authenticate_user, get_password_hash, ACCESS_TOKEN_EXPIRE_MINUTES
+from typing import Annotated
 import asyncio
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from websockets import connect
 from typing import Dict
@@ -16,11 +19,27 @@ app = FastAPI()
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with your frontend URL
+    allow_origins=["http://localhost:3000"],  # Add your frontend URL
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+# Add user model
+class User:
+    def __init__(self, username: str, hashed_password: str):
+        self.username = username
+        self.hashed_password = hashed_password
+
+# Temporary in-memory user database (replace with real DB in production)
+fake_users_db = {
+    "admin": User(
+        username="admin",
+        hashed_password=get_password_hash("admin")
+    )
+}
 
 class GeminiConnection:
     def __init__(self):
@@ -44,7 +63,7 @@ class GeminiConnection:
             raise ValueError("Configuration must be set before connecting")
 
         # Get all memories and format them into the system prompt
-        memories = self.memory_db.get_all_memories(self.config.get("client_id", "default"))
+        memories = self.memory_db.get_all_memories()
         memory_context = "\n".join([f"- {memory[0]}" for memory in memories])
         
         # Send initial setup message with configuration
@@ -180,11 +199,10 @@ class GeminiConnection:
             args = f.get("args", {})
             if func_name == "store_memory":
                 result = self.memory_db.store_memory(
-                    args.get("client_id", ""),
-                    args.get("content", ""),
-                    args.get("context", ""),
-                    args.get("tags", []),
-                    args.get("type", "")
+                    content=args.get("content", ""),
+                    type=args.get("type", "conversation"),
+                    context=args.get("context", ""),
+                    tags=args.get("tags", [])
                 )
                 response_text = f"Stored memory: {args.get('content', '')[:50]}..."
             elif func_name == "get_recent_memories":
@@ -263,15 +281,36 @@ class GeminiConnection:
 connections: Dict[str, GeminiConnection] = {}
 memory_db = MemoryDB()
 
-@app.websocket("/ws/{client_id}")
-async def websocket_endpoint(websocket: WebSocket, client_id: str):
+@app.post("/token")
+async def login_for_access_token(
+    form_data: Annotated[OAuth2PasswordRequestForm, Depends()]
+):
+    user = authenticate_user(fake_users_db, form_data.username, form_data.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+        )
+    access_token = create_access_token(
+        data={"sub": user.username}, 
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
+    
+    # Require authentication for WebSocket
+    username = await get_current_user_websocket(websocket)
+    if not username:
+        return
     
     try:
         
         # Create new Gemini connection for this client
         gemini = GeminiConnection()
-        connections[client_id] = gemini
+        connections[websocket.client] = gemini
         
         # Wait for initial configuration
         config_data = await websocket.receive_json()
@@ -301,7 +340,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                             if gemini.interrupted:
                                 gemini.interrupted = False  # Resume with a new generation if audio arrives after an interrupt
                             if not gemini.ws:
-                                print(f"[Client {client_id}] Gemini connection is closed. Reconnecting...")
+                                print("Gemini connection is closed. Reconnecting...")
                                 await gemini.connect()
                             
                             # Skip storing raw audio messages
@@ -311,7 +350,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                         elif msg_type == "image":
                             await gemini.send_image(message_content["data"])
                         elif msg_type == "interrupt":
-                            print(f"[Client {client_id}] Received interrupt command from client, canceling current Gemini generation.")
+                            print("Received interrupt command from client, canceling current Gemini generation.")
                             gemini.interrupted = True  # Mark the current generation as canceled
                             await websocket.send_json({
                                 "type": "interrupt",
@@ -354,11 +393,10 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                         if "serverContent" in response:
                             content = response["serverContent"]
                             if "modelTurn" in content and "text" in str(content["modelTurn"]):
-                                print(f"[Memory] Storing response for client {client_id}")
+                                print("[Memory] Storing response")
                                 memory_db.store_memory(
-                                    client_id,
                                     json.dumps(content["modelTurn"]),
-                                    "response"
+                                    type="response"
                                 )
                     except Exception as ex:
                         print(f"Gemini receive error: {ex}")
@@ -421,9 +459,43 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
         print(f"WebSocket error: {e}")
     finally:
         # Cleanup
-        if client_id in connections:
-            await connections[client_id].close()
-            del connections[client_id]
+        if websocket.client in connections:
+            await connections[websocket.client].close()
+            del connections[websocket.client]
+
+@app.get("/memories")
+async def get_memories():
+    """Get all memories"""
+    try:
+        memories = memory_db.get_all_memories()
+        return memories
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/memories/{memory_id}")
+async def get_memory(memory_id: int):
+    """Get a specific memory by ID"""
+    try:
+        memory = memory_db.get_memory(memory_id)
+        if not memory:
+            raise HTTPException(status_code=404, detail="Memory not found")
+        return {
+            "id": memory[0],
+            "content": memory[1],
+            "timestamp": memory[2],
+            "type": memory[3]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/memories/{memory_id}")
+async def delete_memory(memory_id: int):
+    """Delete a specific memory"""
+    try:
+        memory_db.delete_memory(memory_id)
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn

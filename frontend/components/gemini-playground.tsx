@@ -2,14 +2,18 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Mic, StopCircle, Video, Monitor } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
 import { base64ToFloat32Array, float32ToPcm16 } from '@/lib/utils';
+
+// Import our new components
+import SettingsPanel from './settings-panel';
+import AudioStatus from './audio-status';
+import VideoDisplay from './video-display';
+import WakeWordIndicator from './wake-word-indicator';
+import WakeWordDebug from './wake-word-debug';
+import ControlButtons from './control-buttons';
+import MemoryPanel from './memory-panel';
 
 interface Config {
   systemPrompt: string;
@@ -21,18 +25,18 @@ interface Config {
   cancelPhrase: string;
 }
 
-export default function GeminiVoiceChat() {
+export default function GeminiPlayground() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState(null);
   const [isAudioSending, setIsAudioSending] = useState(false);
   const [config, setConfig] = useState<Config>({
-    systemPrompt: "You are a friendly Gemini 2.0 model. Respond verbally in a casual, helpful tone.",
+    systemPrompt: "You are Awaken Ambience, a cosmic AI assistant. Respond verbally in a calm, ethereal tone with wisdom and insight.",
     voice: "Puck",
     googleSearch: true,
     allowInterruptions: false,
     isWakeWordEnabled: false,
-    wakeWord: "Gemini",
-    cancelPhrase: "stop"
+    wakeWord: "Ambience",
+    cancelPhrase: "silence"
   });
   
   const [wakeWordDetected, setWakeWordDetected] = useState(false);
@@ -71,7 +75,6 @@ export default function GeminiVoiceChat() {
   const wsRef = useRef(null);
   const audioContextRef = useRef(null);
   const audioInputRef = useRef(null);
-  const clientId = useRef(crypto.randomUUID());
   const wakeWordDetectedRef = useRef(false);
   const [videoEnabled, setVideoEnabled] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -94,7 +97,13 @@ export default function GeminiVoiceChat() {
       setChatMode('audio');
     }
 
-    wsRef.current = new WebSocket(`ws://localhost:8000/ws/${clientId.current}`);
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      setError('Authentication required. Please log in again.');
+      return;
+    }
+    
+    wsRef.current = new WebSocket(`ws://localhost:8000/ws?token=${token}`);
     
     wsRef.current.onopen = async () => {
       wsRef.current.send(JSON.stringify({
@@ -128,6 +137,14 @@ export default function GeminiVoiceChat() {
 
     wsRef.current.onclose = (event) => {
       setIsStreaming(false);
+      // Check if the close was due to authentication failure
+      if (event.code === 1008) {
+        setError('Authentication failed. Please log out and log in again.');
+        // Clear the invalid token
+        localStorage.removeItem('authToken');
+        // Force page reload to show login screen
+        window.location.reload();
+      }
     };
   };
 
@@ -157,7 +174,13 @@ export default function GeminiVoiceChat() {
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
           if (Date.now() - lastWsConnectionAttemptRef.current > 1000) {
             console.log("Reestablishing websocket connection...");
-            const ws = new WebSocket(`ws://localhost:8000/ws/${clientId.current}`);
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+              setError('Authentication required. Please log in again.');
+              stopStream();
+              return;
+            }
+            const ws = new WebSocket(`ws://localhost:8000/ws?token=${encodeURIComponent(token)}`);
             ws.onopen = async () => {
               ws.send(JSON.stringify({
                 type: 'config',
@@ -419,7 +442,9 @@ export default function GeminiVoiceChat() {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      stopVideo();
+      if (videoStreamRef.current) {
+        videoStreamRef.current.getTracks().forEach(track => track.stop());
+      }
       stopStream();
       
       // Clean up audio context
@@ -448,10 +473,15 @@ export default function GeminiVoiceChat() {
       recognition.onend = (event) => {
         console.log("Speech recognition ended", event);
         // Restart recognition if streaming is active (helps capture interrupts even when Gemini is talking)
-        if (isStreaming) {
+        if (isStreaming && recognitionRef.current === recognition) {
           try {
-            recognition.start();
-            console.log("Speech recognition restarted");
+            // Add a small delay to prevent rapid restart loops
+            setTimeout(() => {
+              if (isStreaming && recognitionRef.current === recognition) {
+                recognition.start();
+                console.log("Speech recognition restarted");
+              }
+            }, 300);
           } catch (err) {
             console.log("Failed to restart speech recognition:", err);
           }
@@ -533,7 +563,13 @@ export default function GeminiVoiceChat() {
             // Force reconnection if needed
             if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
               console.log("Reconnecting WebSocket after wake word detection");
-              const ws = new WebSocket(`ws://localhost:8000/ws/${clientId.current}`);
+              const token = localStorage.getItem('authToken');
+              if (!token) {
+                setError('Authentication required. Please log in again.');
+                stopStream();
+                return;
+              }
+              const ws = new WebSocket(`ws://localhost:8000/ws?token=${encodeURIComponent(token)}`);
               ws.onopen = async () => {
                 ws.send(JSON.stringify({ type: 'config', config: config }));
                 setIsStreaming(true);
@@ -550,12 +586,6 @@ export default function GeminiVoiceChat() {
             // Retain the transcript for debugging
             setWakeWordTranscript(transcript);
           }
-        }
-      };
-
-      recognition.onerror = (event) => {
-        if (event.error === 'not-allowed' || event.error === 'audio-capture') {
-          setError('Microphone already in use - disable wake word to continue');
         }
       };
 
@@ -580,8 +610,21 @@ export default function GeminiVoiceChat() {
 
   return (
     <div className="container mx-auto py-8 px-4 sm:px-6 md:px-8">
-      <div className="space-y-6">
-        <h1 className="text-4xl font-bold tracking-tight">Gemini 2.0 Realtime Playground ✨</h1>
+      <div className="space-y-6 relative z-10">
+        <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/40 via-purple-900/20 to-transparent rounded-3xl blur-xl"></div>
+        <div className="flex justify-between items-center">
+          <h1 className="text-4xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-pink-500 to-indigo-400 glow-text">Awaken Ambience ✨</h1>
+          <div className="flex items-center space-x-2">
+            <MemoryPanel
+              isConnected={isConnected}
+            />
+            <SettingsPanel 
+              config={config} 
+              setConfig={setConfig} 
+              isConnected={isConnected} 
+            />
+          </div>
+        </div>
         
         {error && (
           <Alert variant="destructive">
@@ -590,242 +633,36 @@ export default function GeminiVoiceChat() {
           </Alert>
         )}
 
-        <Card>
-          <CardContent className="pt-6 space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="system-prompt">System Prompt</Label>
-              <Textarea
-                id="system-prompt"
-                value={config.systemPrompt}
-                onChange={(e) => setConfig(prev => ({ ...prev, systemPrompt: e.target.value }))}
-                disabled={isConnected}
-                className="min-h-[100px]"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="voice-select">Voice</Label>
-              <Select
-                value={config.voice}
-                onValueChange={(value) => setConfig(prev => ({ ...prev, voice: value }))}
-                disabled={isConnected}
-              >
-                <SelectTrigger id="voice-select">
-                  <SelectValue placeholder="Select a voice" />
-                </SelectTrigger>
-                <SelectContent>
-                  {voices.map((voice) => (
-                    <SelectItem key={voice} value={voice}>
-                      {voice}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="google-search"
-                checked={config.googleSearch}
-                onCheckedChange={(checked) => 
-                  setConfig(prev => ({ ...prev, googleSearch: checked as boolean }))}
-                disabled={isConnected}
-              />
-              <Label htmlFor="google-search">Enable Google Search</Label>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="allow-interruptions"
-                checked={config.allowInterruptions}
-                onCheckedChange={(checked) =>
-                  setConfig(prev => ({ ...prev, allowInterruptions: checked as boolean }))
-                }
-                disabled={isConnected}
-              />
-              <Label htmlFor="allow-interruptions">Allow Interruptions</Label>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="wake-word-enabled"
-                checked={config.isWakeWordEnabled}
-                onCheckedChange={(checked) => 
-                  setConfig(prev => ({ ...prev, isWakeWordEnabled: checked as boolean }))}
-                disabled={isConnected}
-              />
-              <Label htmlFor="wake-word-enabled">Enable Wake Word</Label>
-            </div>
-
-            {config.isWakeWordEnabled && (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="wake-word">Wake Word</Label>
-                  <Textarea
-                    id="wake-word"
-                    value={config.wakeWord}
-                    onChange={(e) => setConfig(prev => ({ ...prev, wakeWord: e.target.value }))}
-                    disabled={isConnected}
-                    className="min-h-[40px]"
-                    placeholder="Enter wake word phrase"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="cancel-phrase">Cancel Phrase</Label>
-                  <Textarea
-                    id="cancel-phrase"
-                    value={config.cancelPhrase}
-                    onChange={(e) => setConfig(prev => ({ ...prev, cancelPhrase: e.target.value }))}
-                    disabled={isConnected}
-                    className="min-h-[40px]"
-                    placeholder="Enter cancellation phrase"
-                  />
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        <div className="flex flex-wrap gap-4 justify-center">
-          {!isStreaming && (
-            <>
-            <Button
-              onClick={() => startStream('audio')}
-              disabled={isStreaming}
-              className="gap-2"
-          >
-            <Mic className="h-4 w-4" />
-            Start Chatting
-          </Button>
-
-          <Button
-            onClick={() => startStream('camera')}
-            disabled={isStreaming}
-            className="gap-2"
-          >
-            <Video className="h-4 w-4" />
-              Start Chatting with Video
-            </Button>
-          
-          <Button
-            onClick={() => startStream('screen')}
-            disabled={isStreaming}
-            className="gap-2"
-          >
-            <Monitor className="h-4 w-4" />
-              Start Chatting with Screen
-            </Button>
-          </>
-
-            
-          )}
-
-          {isStreaming && (
-            <>
-              <Button
-                onClick={stopStream}
-                variant="destructive"
-                className="gap-2"
-              >
-                <StopCircle className="h-4 w-4" />
-                Stop Chat
-              </Button>
-            </>
-          )}
-        </div>
+        <ControlButtons 
+          isStreaming={isStreaming} 
+          startStream={startStream} 
+          stopStream={stopStream} 
+        />
 
         {isStreaming && (
-          <Card>
-            <CardContent className="flex items-center justify-center h-24 mt-6">
-              <div className="flex flex-col items-center gap-2">
-                <div className="relative">
-                  <Mic className={`h-8 w-8 ${isAudioSending ? 'text-green-500' : 'text-blue-500'} animate-pulse`} />
-                  {isAudioSending && (
-                    <span className="absolute -top-1 -right-1 h-3 w-3 bg-green-500 rounded-full">
-                      <span className="absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75 animate-ping" />
-                    </span>
-                  )}
-                </div>
-                <div className="flex flex-col items-center gap-1">
-                  <p className="text-gray-600">
-                    {config.isWakeWordEnabled && !wakeWordDetected 
-                      ? "Listening for wake word..."
-                      : "Listening to conversation..."}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {config.isWakeWordEnabled 
-                      ? wakeWordDetected 
-                        ? "Sending audio to Gemini..." 
-                        : "Waiting for wake word..."
-                      : isAudioSending 
-                        ? "Sending audio to Gemini..." 
-                        : "Audio paused"}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <AudioStatus 
+            isAudioSending={isAudioSending} 
+            isWakeWordEnabled={config.isWakeWordEnabled} 
+            wakeWordDetected={wakeWordDetected} 
+          />
         )}
 
         {(chatMode === 'video') && (
-          <Card>
-            <CardContent className="pt-6 space-y-4">
-              <div className="flex justify-between items-center">
-                <h2 className="text-lg font-semibold">Video Input</h2>
-              </div>
-              
-              <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="w-full h-auto object-contain"
-                  style={{ transform: videoSource === 'camera' ? 'scaleX(-1)' : 'none' }}
-                />
-                <canvas
-                  ref={canvasRef}
-                  className="hidden"
-                  width={640}
-                  height={480}
-                />
-              </div>
-            </CardContent>
-          </Card>
+          <VideoDisplay 
+            videoRef={videoRef} 
+            canvasRef={canvasRef} 
+            videoSource={videoSource} 
+          />
         )}
 
-        {wakeWordDetected && (
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-2 text-green-600">
-                <span className="relative flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
-                </span>
-                Wake word detected! Listening to conversation...
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        <WakeWordIndicator wakeWordDetected={wakeWordDetected} />
 
         {config.isWakeWordEnabled && (
-          <Card>
-            <CardContent className="pt-6 space-y-4">
-              <h2 className="text-lg font-semibold">Wake Word Debug</h2>
-              <div className="text-sm text-muted-foreground">
-                <p>Listening for: <strong>{config.wakeWord.toLowerCase()}</strong></p>
-                <p className="mt-2">Current transcript:</p>
-                <div className="p-2 bg-gray-50 rounded-md min-h-[40px]">
-                  {isStreaming ? wakeWordTranscript : 'Start chat to begin listening...'}
-                </div>
-                {isStreaming && (
-                  <p className="text-xs text-yellow-600 mt-2">
-                    Note: Transcript may be limited while streaming due to browser microphone constraints
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+          <WakeWordDebug 
+            isStreaming={isStreaming} 
+            wakeWordTranscript={wakeWordTranscript} 
+            wakeWord={config.wakeWord} 
+          />
         )}
 
       </div>

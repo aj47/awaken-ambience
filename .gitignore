@@ -166,3 +166,6 @@ audio_data.wav
 .aider.chat.history.md
 .aider.input.history
 .DS_Store
+
+backend/memories.db
+.aider*
