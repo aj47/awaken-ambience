@@ -1,9 +1,9 @@
 import type { NextConfig } from 'next';
 
 const config: NextConfig = {
-  output: 'standalone',
-  experimental: {
-    outputFileTracingRoot: __dirname,
+  output: 'export',
+  images: {
+    unoptimized: true
   },
   eslint: {
     ignoreDuringBuilds: true,
