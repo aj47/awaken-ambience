@@ -1,5 +1,8 @@
-from fastapi import FastAPI, WebSocket, HTTPException
+from fastapi import FastAPI, WebSocket, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from security import get_current_user_websocket, create_access_token, authenticate_user, get_password_hash
+from typing import Annotated
 import asyncio
 import json
 import os
@@ -16,11 +19,27 @@ app = FastAPI()
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with your frontend URL
+    allow_origins=os.getenv("ALLOWED_ORIGINS", []),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+# Add user model
+class User:
+    def __init__(self, username: str, hashed_password: str):
+        self.username = username
+        self.hashed_password = hashed_password
+
+# Temporary in-memory user database (replace with real DB in production)
+fake_users_db = {
+    "admin": User(
+        username="admin",
+        hashed_password=get_password_hash("admin")
+    )
+}
 
 class GeminiConnection:
     def __init__(self):
@@ -262,9 +281,30 @@ class GeminiConnection:
 connections: Dict[str, GeminiConnection] = {}
 memory_db = MemoryDB()
 
+@app.post("/token")
+async def login_for_access_token(
+    form_data: Annotated[OAuth2PasswordRequestForm, Depends()]
+):
+    user = authenticate_user(fake_users_db, form_data.username, form_data.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+        )
+    access_token = create_access_token(
+        data={"sub": user.username}, 
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
+    
+    # Require authentication for WebSocket
+    username = await get_current_user_websocket(websocket)
+    if not username:
+        return
     
     try:
         

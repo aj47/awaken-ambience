@@ -15,6 +15,13 @@ class MemoryDB:
                     content TEXT NOT NULL,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                     type TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT UNIQUE NOT NULL,
+                    hashed_password TEXT NOT NULL,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
             """)
             conn.commit()
@@ -121,6 +128,27 @@ class MemoryDB:
             )
             conn.commit()
             print(f"[MemoryDB] Updated memory ID {memory_id}")
+    def create_user(self, username: str, password: str):
+        """Creates a new user with hashed password"""
+        hashed_password = get_password_hash(password)
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT INTO users (username, hashed_password) VALUES (?, ?)",
+                (username, hashed_password)
+            )
+            conn.commit()
+        print(f"[MemoryDB] Created user {username}")
+
+    def get_user(self, username: str):
+        """Get user by username"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                "SELECT username, hashed_password FROM users WHERE username = ?",
+                (username,)
+            )
+            user = cursor.fetchone()
+            return user
+
     def get_memory(self, memory_id: int):
         """Retrieves a specific memory by ID.
         

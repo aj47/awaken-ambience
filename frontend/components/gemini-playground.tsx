@@ -97,7 +97,9 @@ export default function GeminiPlayground() {
       setChatMode('audio');
     }
 
-    wsRef.current = new WebSocket(`ws://localhost:8000/ws`);
+    // In real implementation, get token from your auth context
+    const token = localStorage.getItem('authToken'); 
+    wsRef.current = new WebSocket(`ws://localhost:8000/ws?token=${token}`);
     
     wsRef.current.onopen = async () => {
       wsRef.current.send(JSON.stringify({
