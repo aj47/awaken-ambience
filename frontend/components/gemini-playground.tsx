@@ -739,15 +739,17 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
   }, [config.wakeWord, config.cancelPhrase, isStreaming]);
 
   return (
-    <div className="container mx-auto py-8 px-4 sm:px-6 md:px-8">
-      <div className="space-y-6 relative z-10">
+    <div className="container mx-auto px-4 sm:px-6 md:px-8 h-screen flex flex-col">
+      <div className="space-y-6 relative z-10 flex-grow">
         <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/40 via-purple-900/20 to-transparent rounded-3xl blur-xl"></div>
-        <HeaderButtons 
-          isConnected={isConnected} 
-          config={config}
-          setConfig={setConfig}
-          onLogout={onLogout} 
-        />
+        <div className="pt-2">
+          <HeaderButtons 
+            isConnected={isConnected} 
+            config={config}
+            setConfig={setConfig}
+            onLogout={onLogout} 
+          />
+        </div>
         <div className="flex flex-col items-center justify-center w-full min-h-[20vh]">
           <div className="flex flex-col items-center justify-center gap-2 w-full">
             <div className="text-4xl glow-text">✨</div>
