@@ -1,7 +1,9 @@
-from fastapi import FastAPI, WebSocket, HTTPException, Depends, status
+from fastapi import FastAPI, WebSocket, HTTPException, Depends, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from security import get_current_user_websocket, create_access_token, authenticate_user, get_password_hash, ACCESS_TOKEN_EXPIRE_MINUTES
+from jose import JWTError, jwt
+from security import SECRET_KEY, ALGORITHM
 from typing import Annotated
 import asyncio
 import json
@@ -289,6 +291,26 @@ class GeminiConnection:
         await self.ws.send(json.dumps(image_message))
 
 
+# Helper function to get username from token
+def get_username_from_token(token: str) -> str:
+    """Extract username from JWT token"""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        return username
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
 # Store active connections
 connections: Dict[str, GeminiConnection] = {}
 memory_db = MemoryDB()
@@ -501,36 +523,79 @@ async def websocket_endpoint(websocket: WebSocket):
             del connections[websocket.client]
 
 @app.get("/memories")
-async def get_memories(current_username: str = Depends(get_current_user_websocket)):
+async def get_memories(request: Request):
     """Get all memories"""
     try:
-        memories = memory_db.get_all_memories(current_username)
+        token = request.headers.get("Authorization", "").replace("Bearer ", "")
+        
+        if not token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+            
+        username = get_username_from_token(token)
+        memories = memory_db.get_all_memories(username)
         return memories
+    except HTTPException as he:
+        raise he
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/memories/{memory_id}")
-async def get_memory(memory_id: int):
+async def get_memory(memory_id: int, request: Request):
     """Get a specific memory by ID"""
     try:
+        token = request.headers.get("Authorization", "").replace("Bearer ", "")
+        
+        if not token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+            
+        username = get_username_from_token(token)
+        
+        # Get the memory and verify it belongs to the user
         memory = memory_db.get_memory(memory_id)
         if not memory:
             raise HTTPException(status_code=404, detail="Memory not found")
+            
+        # Check if memory belongs to user (assuming memory[4] is username)
+        if len(memory) > 4 and memory[4] != username:
+            raise HTTPException(status_code=403, detail="Not authorized to access this memory")
+            
         return {
             "id": memory[0],
             "content": memory[1],
             "timestamp": memory[2],
             "type": memory[3]
         }
+    except HTTPException as he:
+        raise he
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/memories/{memory_id}")
-async def delete_memory(memory_id: int, current_username: str = Depends(get_current_user_websocket)):
+async def delete_memory(memory_id: int, request: Request):
     """Delete a specific memory"""
     try:
-        memory_db.delete_memory(memory_id, current_username)
+        token = request.headers.get("Authorization", "").replace("Bearer ", "")
+        
+        if not token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+            
+        username = get_username_from_token(token)
+        memory_db.delete_memory(memory_id, username)
         return {"status": "success"}
+    except HTTPException as he:
+        raise he
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
