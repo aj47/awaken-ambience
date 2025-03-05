@@ -28,6 +28,7 @@ interface Config {
 export default function GeminiPlayground() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState(null);
+  const [isConnected, setIsConnected] = useState(false);
   const [isAudioSending, setIsAudioSending] = useState(false);
   const [config, setConfig] = useState<Config>({
     systemPrompt: "You are a friendly assistant",
