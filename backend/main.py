@@ -395,7 +395,40 @@ async def websocket_endpoint(websocket: WebSocket):
                 
                         message_content = json.loads(message_text)
                         msg_type = message_content["type"]
-                        if msg_type == "audio":
+                        if msg_type == "config":
+                            # Handle config updates during active connection
+                            print(f"[WebSocket] Received updated config from client")
+                            updated_config = message_content.get("config", {})
+                            
+                            # Ensure all required config fields are present
+                            default_config = {
+                                "systemPrompt": "You are a friendly AI assistant.",
+                                "voice": "Puck",
+                                "googleSearch": True,
+                                "allowInterruptions": True,
+                                "isWakeWordEnabled": False,
+                                "wakeWord": "",
+                                "cancelPhrase": ""
+                            }
+                            
+                            # Merge with defaults for any missing fields
+                            for key, value in default_config.items():
+                                if key not in updated_config:
+                                    updated_config[key] = value
+                            
+                            # Update the configuration
+                            gemini.set_config(updated_config)
+                            
+                            # Save to database
+                            memory_db.update_user_config(username, updated_config)
+                            print(f"[WebSocket] Updated config saved to database for user {username}")
+                            
+                            # Reconnect to Gemini with new config if needed
+                            if gemini.ws:
+                                await gemini.close()
+                            await gemini.connect()
+                            
+                        elif msg_type == "audio":
                             if gemini.interrupted:
                                 gemini.interrupted = False  # Resume with a new generation if audio arrives after an interrupt
                             if not gemini.ws:
@@ -594,6 +627,85 @@ async def delete_memory(memory_id: int, request: Request):
         username = get_username_from_token(token)
         memory_db.delete_memory(memory_id, username)
         return {"status": "success"}
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/config")
+async def update_config(request: Request):
+    """Update user configuration"""
+    try:
+        token = request.headers.get("Authorization", "").replace("Bearer ", "")
+        
+        if not token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+            
+        username = get_username_from_token(token)
+        
+        # Get the request body
+        config_data = await request.json()
+        
+        # Ensure all required config fields are present
+        default_config = {
+            "systemPrompt": "You are a friendly AI assistant.",
+            "voice": "Puck",
+            "googleSearch": True,
+            "allowInterruptions": True,
+            "isWakeWordEnabled": False,
+            "wakeWord": "",
+            "cancelPhrase": ""
+        }
+        
+        # Merge with defaults for any missing fields
+        for key, value in default_config.items():
+            if key not in config_
+                config_data[key] = value
+        
+        # Update the configuration in the database
+        memory_db.update_user_config(username, config_data)
+        
+        return {"status": "success", "message": "Configuration updated successfully"}
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/config")
+async def get_config(request: Request):
+    """Get user configuration"""
+    try:
+        token = request.headers.get("Authorization", "").replace("Bearer ", "")
+        
+        if not token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+            
+        username = get_username_from_token(token)
+        
+        # Get the configuration from the database
+        config = memory_db.get_user_config(username)
+        
+        if not config:
+            # Return default config if none exists
+            config = {
+                "systemPrompt": "You are a friendly AI assistant.",
+                "voice": "Puck",
+                "googleSearch": True,
+                "allowInterruptions": True,
+                "isWakeWordEnabled": False,
+                "wakeWord": "",
+                "cancelPhrase": ""
+            }
+        
+        return config
     except HTTPException as he:
         raise he
     except Exception as e:

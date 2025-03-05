@@ -27,7 +27,45 @@ interface SettingsPanelProps {
 
 export default function SettingsPanel({ config, setConfig, isConnected }: SettingsPanelProps): React.JSX.Element {
   const [isOpen, setIsOpen] = React.useState(false);
+  const [isSaving, setIsSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
   const voices = ["Puck", "Charon", "Kore", "Fenrir", "Aoede"];
+  
+  const saveConfig = async () => {
+    setIsSaving(true);
+    setError(null);
+    try {
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        setError('Authentication required');
+        return;
+      }
+      
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const response = await fetch(`${apiUrl}/config`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(config)
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Config save error:", response.status, errorText);
+        throw new Error(`Error ${response.status}: ${response.statusText}`);
+      }
+      
+      console.log("Configuration saved successfully");
+      setIsOpen(false);
+    } catch (err) {
+      console.error("Failed to save configuration:", err);
+      setError('Failed to save configuration: ' + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <div className="relative">
@@ -144,15 +182,14 @@ export default function SettingsPanel({ config, setConfig, isConnected }: Settin
               >
                 Exit Without Saving
               </Button>
+              {error && (
+                <div className="text-red-500 text-sm mb-2">{error}</div>
+              )}
               <Button 
-                onClick={() => {
-                  // Save settings to localStorage
-                  localStorage.setItem('geminiConfig', JSON.stringify(config));
-                  setIsOpen(false);
-                }}
-                disabled={isConnected}
+                onClick={saveConfig}
+                disabled={isSaving}
               >
-                Save Changes
+                {isSaving ? "Saving..." : "Save Changes"}
               </Button>
             </div>
           </Card>

@@ -41,29 +41,45 @@ export default function GeminiPlayground() {
   
   const [wakeWordDetected, setWakeWordDetected] = useState(false);
 
-  // Load persisted settings from local storage on mount
+  // Load config from API on mount
   useEffect(() => {
-    const storedConfig = localStorage.getItem('geminiConfig');
-    if (storedConfig) {
+    const fetchConfig = async () => {
       try {
-        const parsed = JSON.parse(storedConfig);
+        const token = localStorage.getItem('authToken');
+        if (!token) {
+          console.log("No auth token found, using default config");
+          return;
+        }
+        
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const response = await fetch(`${apiUrl}/config`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Error ${response.status}: ${response.statusText}`);
+        }
+        
+        const configData = await response.json();
+        console.log("Loaded config from API:", configData);
+        
         // Create a complete config object with fallbacks to default values
         const completeConfig = {
-          systemPrompt: parsed.systemPrompt || "You are a friendly assistant",
-          voice: parsed.voice || "Puck",
-          googleSearch: parsed.googleSearch !== undefined ? parsed.googleSearch : true,
-          allowInterruptions: parsed.allowInterruptions !== undefined ? parsed.allowInterruptions : false,
-          isWakeWordEnabled: parsed.isWakeWordEnabled !== undefined ? parsed.isWakeWordEnabled : false,
-          wakeWord: parsed.wakeWord || "Ambience",
-          cancelPhrase: parsed.cancelPhrase || "silence"
+          systemPrompt: configData.systemPrompt || "You are a friendly assistant",
+          voice: configData.voice || "Puck",
+          googleSearch: configData.googleSearch !== undefined ? configData.googleSearch : true,
+          allowInterruptions: configData.allowInterruptions !== undefined ? configData.allowInterruptions : false,
+          isWakeWordEnabled: configData.isWakeWordEnabled !== undefined ? configData.isWakeWordEnabled : false,
+          wakeWord: configData.wakeWord || "Ambience",
+          cancelPhrase: configData.cancelPhrase || "silence"
         };
         
-        // Set the complete config
         setConfig(completeConfig);
-        console.log("Loaded settings from localStorage:", completeConfig);
-      } catch (e) {
-        console.error('Failed to parse stored config:', e);
-        // If parsing fails, ensure we have default settings
+      } catch (err) {
+        console.error("Failed to load config from API:", err);
+        // Use default config if API call fails
         const defaultConfig = {
           systemPrompt: "You are a friendly assistant",
           voice: "Puck",
@@ -74,20 +90,23 @@ export default function GeminiPlayground() {
           cancelPhrase: "silence"
         };
         setConfig(defaultConfig);
-        // Store the default config
-        localStorage.setItem('geminiConfig', JSON.stringify(defaultConfig));
       }
-    }
+    };
+    
+    fetchConfig();
   }, []);
 
-  // Persist settings to local storage when they change
+  // Send updated config to backend when it changes
   useEffect(() => {
     // Only save if the config has been initialized (not the first render)
-    if (Object.keys(config).length > 0) {
-      console.log("Saving settings to localStorage:", config);
-      localStorage.setItem('geminiConfig', JSON.stringify(config));
+    if (Object.keys(config).length > 0 && isConnected && wsRef.current?.readyState === WebSocket.OPEN) {
+      console.log("Sending updated config to backend");
+      wsRef.current.send(JSON.stringify({
+        type: 'config',
+        config: config
+      }));
     }
-  }, [config]);
+  }, [config, isConnected]);
   const [wakeWordTranscript, setWakeWordTranscript] = useState('');
   const recognitionRef = useRef(null);
   const lastInterruptTimeRef = useRef<number>(0);
