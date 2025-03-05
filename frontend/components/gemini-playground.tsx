@@ -6,14 +6,13 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { base64ToFloat32Array, float32ToPcm16 } from "@/lib/utils";
 
-// Import our new components
-import SettingsPanel from "./settings-panel";
+// Import our components
 import AudioStatus from "./audio-status";
 import VideoDisplay from "./video-display";
 import WakeWordIndicator from "./wake-word-indicator";
 import WakeWordDebug from "./wake-word-debug";
 import ControlButtons from "./control-buttons";
-import MemoryPanel from "./memory-panel";
+import HeaderButtons from "./header-buttons";
 
 interface Config {
   systemPrompt: string;
@@ -25,7 +24,11 @@ interface Config {
   cancelPhrase: string;
 }
 
-export default function GeminiPlayground() {
+interface GeminiPlaygroundProps {
+  onLogout: () => void;
+}
+
+export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -739,14 +742,12 @@ export default function GeminiPlayground() {
     <div className="container mx-auto py-8 px-4 sm:px-6 md:px-8">
       <div className="space-y-6 relative z-10">
         <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/40 via-purple-900/20 to-transparent rounded-3xl blur-xl"></div>
-        <div className="flex flex-col items-end w-full">
-          <MemoryPanel isConnected={isConnected} />
-          <SettingsPanel
-            config={config}
-            setConfig={setConfig}
-            isConnected={isConnected}
-          />
-        </div>
+        <HeaderButtons 
+          isConnected={isConnected} 
+          config={config}
+          setConfig={setConfig}
+          onLogout={onLogout} 
+        />
         <div className="flex flex-col items-center w-full">
           <div className="flex flex-col items-center justify-center gap-2 w-full">
             <div className="text-4xl glow-text">✨</div>

@@ -38,10 +38,7 @@ export default function Home() {
 
   return (
     <div className="relative">
-      <div className="absolute top-4 right-4 z-50">
-        <Button variant="outline" onClick={handleLogout}>Logout</Button>
-      </div>
-      <GeminiPlayground />
+      <GeminiPlayground onLogout={handleLogout} />
     </div>
   );
 }
