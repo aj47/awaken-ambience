@@ -663,7 +663,7 @@ async def update_config(request: Request):
         
         # Merge with defaults for any missing fields
         for key, value in default_config.items():
-            if key not in config_
+            if key not in config_data:
                 config_data[key] = value
         
         # Update the configuration in the database
