@@ -47,25 +47,46 @@ export default function GeminiPlayground() {
     if (storedConfig) {
       try {
         const parsed = JSON.parse(storedConfig);
-        // Merge with default config to ensure all fields are present
-        setConfig((prev) => ({
-          systemPrompt: parsed.systemPrompt || prev.systemPrompt,
-          voice: parsed.voice || prev.voice,
-          googleSearch: parsed.googleSearch !== undefined ? parsed.googleSearch : prev.googleSearch,
-          allowInterruptions: parsed.allowInterruptions !== undefined ? parsed.allowInterruptions : prev.allowInterruptions,
-          isWakeWordEnabled: parsed.isWakeWordEnabled !== undefined ? parsed.isWakeWordEnabled : prev.isWakeWordEnabled,
-          wakeWord: parsed.wakeWord || prev.wakeWord,
-          cancelPhrase: parsed.cancelPhrase || prev.cancelPhrase
-        }));
+        // Create a complete config object with fallbacks to default values
+        const completeConfig = {
+          systemPrompt: parsed.systemPrompt || "You are a friendly assistant",
+          voice: parsed.voice || "Puck",
+          googleSearch: parsed.googleSearch !== undefined ? parsed.googleSearch : true,
+          allowInterruptions: parsed.allowInterruptions !== undefined ? parsed.allowInterruptions : false,
+          isWakeWordEnabled: parsed.isWakeWordEnabled !== undefined ? parsed.isWakeWordEnabled : false,
+          wakeWord: parsed.wakeWord || "Ambience",
+          cancelPhrase: parsed.cancelPhrase || "silence"
+        };
+        
+        // Set the complete config
+        setConfig(completeConfig);
+        console.log("Loaded settings from localStorage:", completeConfig);
       } catch (e) {
         console.error('Failed to parse stored config:', e);
+        // If parsing fails, ensure we have default settings
+        const defaultConfig = {
+          systemPrompt: "You are a friendly assistant",
+          voice: "Puck",
+          googleSearch: true,
+          allowInterruptions: false,
+          isWakeWordEnabled: false,
+          wakeWord: "Ambience",
+          cancelPhrase: "silence"
+        };
+        setConfig(defaultConfig);
+        // Store the default config
+        localStorage.setItem('geminiConfig', JSON.stringify(defaultConfig));
       }
     }
   }, []);
 
   // Persist settings to local storage when they change
   useEffect(() => {
-    localStorage.setItem('geminiConfig', JSON.stringify(config));
+    // Only save if the config has been initialized (not the first render)
+    if (Object.keys(config).length > 0) {
+      console.log("Saving settings to localStorage:", config);
+      localStorage.setItem('geminiConfig', JSON.stringify(config));
+    }
   }, [config]);
   const [wakeWordTranscript, setWakeWordTranscript] = useState('');
   const recognitionRef = useRef(null);

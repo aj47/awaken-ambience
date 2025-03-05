@@ -165,7 +165,16 @@ class GeminiConnection:
 
     def set_config(self, config):
         """Set configuration for the connection"""
+        # Validate and normalize config
+        if not isinstance(config, dict):
+            raise ValueError("Config must be a dictionary")
+            
+        # Ensure systemPrompt is properly named
+        if "systemPrompt" in config:
+            config["systemPrompt"] = config["systemPrompt"]
+        
         self.config = config
+        print(f"[GeminiConnection] Config set: {self.config}")
 
     async def send_audio(self, audio_data: str):
         """Send audio data to Gemini"""
@@ -313,6 +322,11 @@ async def websocket_endpoint(websocket: WebSocket):
         gemini = GeminiConnection()
         gemini.username = username
         connections[websocket.client] = gemini
+        
+        # Try to load saved config from database
+        saved_config = memory_db.get_user_config(username)
+        if saved_config:
+            print(f"[WebSocket] Loaded saved config for user {username}")
 
         # Wait for initial configuration
         config_data = await websocket.receive_json()
@@ -321,8 +335,27 @@ async def websocket_endpoint(websocket: WebSocket):
         
         # Set the configuration and update it in the DB
         const_config = config_data.get("config", {})
+        
+        # Ensure all required config fields are present
+        default_config = {
+            "systemPrompt": "You are a friendly AI assistant.",
+            "voice": "Puck",
+            "googleSearch": True,
+            "allowInterruptions": True,
+            "isWakeWordEnabled": False,
+            "wakeWord": "",
+            "cancelPhrase": ""
+        }
+        
+        # Merge with defaults for any missing fields
+        for key, value in default_config.items():
+            if key not in const_config:
+                const_config[key] = value
+        
         gemini.set_config(const_config)
         memory_db.update_user_config(username, const_config)
+        
+        print(f"[WebSocket] Received config from client: {const_config}")
 
         # Initialize Gemini connection
         await gemini.connect()

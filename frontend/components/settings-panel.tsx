@@ -145,7 +145,11 @@ export default function SettingsPanel({ config, setConfig, isConnected }: Settin
                 Exit Without Saving
               </Button>
               <Button 
-                onClick={() => setIsOpen(false)}
+                onClick={() => {
+                  // Save settings to localStorage
+                  localStorage.setItem('geminiConfig', JSON.stringify(config));
+                  setIsOpen(false);
+                }}
                 disabled={isConnected}
               >
                 Save Changes
