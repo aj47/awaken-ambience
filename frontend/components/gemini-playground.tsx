@@ -112,7 +112,6 @@ export default function GeminiPlayground() {
   const recognitionRef = useRef(null);
   const lastInterruptTimeRef = useRef<number>(0);
   const lastWsConnectionAttemptRef = useRef<number>(0);
-  const [isConnected, setIsConnected] = useState(false);
   const wsRef = useRef(null);
   const audioContextRef = useRef(null);
   const audioInputRef = useRef(null);
