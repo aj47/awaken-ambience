@@ -748,7 +748,7 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
           setConfig={setConfig}
           onLogout={onLogout} 
         />
-        <div className="flex flex-col items-center w-full">
+        <div className="flex flex-col items-center justify-center w-full min-h-[20vh]">
           <div className="flex flex-col items-center justify-center gap-2 w-full">
             <div className="text-4xl glow-text">✨</div>
             <h1 className="text-4xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-pink-500 to-indigo-400 glow-text">
@@ -764,11 +764,13 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
           </Alert>
         )}
 
-        <ControlButtons
-          isStreaming={isStreaming}
-          startStream={startStream}
-          stopStream={stopStream}
-        />
+        <div className="flex justify-center w-full my-6">
+          <ControlButtons
+            isStreaming={isStreaming}
+            startStream={startStream}
+            stopStream={stopStream}
+          />
+        </div>
 
         {isStreaming && (
           <AudioStatus
