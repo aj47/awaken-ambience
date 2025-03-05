@@ -101,7 +101,6 @@ export default function MemoryPanel({ isConnected }: MemoryPanelProps): JSX.Elem
         variant="outline" 
         size="icon" 
         onClick={() => setIsOpen(!isOpen)}
-        className="absolute top-0 right-12 z-10"
       >
         <Database className="h-4 w-4" />
       </Button>

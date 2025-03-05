@@ -73,7 +73,6 @@ export default function SettingsPanel({ config, setConfig, isConnected }: Settin
         variant="outline" 
         size="icon" 
         onClick={() => setIsOpen(!isOpen)}
-        className="absolute top-0 right-0 z-10"
       >
         <Settings className="h-4 w-4" />
       </Button>

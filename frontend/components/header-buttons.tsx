@@ -20,13 +20,15 @@ export default function HeaderButtons({
 }: HeaderButtonsProps) {
   return (
     <div className="flex flex-row items-center gap-2 w-full justify-end">
-      <MemoryPanel isConnected={isConnected} />
-      <SettingsPanel 
-        config={config}
-        setConfig={setConfig}
-        isConnected={isConnected}
-      />
-      <Button variant="outline" onClick={onLogout}>Logout</Button>
+      <div className="flex items-center space-x-2">
+        <MemoryPanel isConnected={isConnected} />
+        <SettingsPanel 
+          config={config}
+          setConfig={setConfig}
+          isConnected={isConnected}
+        />
+        <Button variant="outline" onClick={onLogout}>Logout</Button>
+      </div>
     </div>
   );
 }
