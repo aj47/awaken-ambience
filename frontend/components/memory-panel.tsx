@@ -22,30 +22,70 @@ export default function MemoryPanel({ isConnected }: MemoryPanelProps): JSX.Elem
   const [memories, setMemories] = useState<Memory[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  const [loading, setLoading] = useState(false);
+  
   const fetchMemories = async () => {
+    setLoading(true);
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/memories`);
-      if (!response.ok) throw new Error('Failed to fetch memories');
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        setError('Authentication required');
+        return;
+      }
+      
+      console.log("Fetching memories with token:", token);
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const response = await fetch(`${apiUrl}/memories`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Memory fetch error:", response.status, errorText);
+        throw new Error(`Error ${response.status}: ${response.statusText}`);
+      }
+      
       const data = await response.json();
+      console.log("Fetched memories:", data);
       setMemories(data);
       setError(null);
     } catch (err) {
-      setError('Failed to load memories');
-      console.error(err);
+      console.error("Memory fetch error:", err);
+      setError('Failed to load memories: ' + err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   const deleteMemory = async (id: number) => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/memories/${id}`, {
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        setError('Authentication required');
+        return;
+      }
+      
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const response = await fetch(`${apiUrl}/memories/${id}`, {
         method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       });
-      if (!response.ok) throw new Error('Failed to delete memory');
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Memory delete error:", response.status, errorText);
+        throw new Error(`Error ${response.status}: ${response.statusText}`);
+      }
+      
       await fetchMemories(); // Refresh the list
       setError(null);
     } catch (err) {
-      setError('Failed to delete memory');
-      console.error(err);
+      console.error("Memory delete error:", err);
+      setError('Failed to delete memory: ' + err.message);
     }
   };
 
@@ -72,29 +112,37 @@ export default function MemoryPanel({ isConnected }: MemoryPanelProps): JSX.Elem
             <CardContent className="pt-6 space-y-4">
               <h2 className="text-2xl font-bold text-indigo-200">Memories</h2>
               
-              {error && (
+              {loading ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-indigo-500"></div>
+                </div>
+              ) : error ? (
                 <Alert variant="destructive">
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
+              ) : memories.length === 0 ? (
+                <div className="text-center py-8 text-gray-400">
+                  No memories found
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {memories.map((memory) => (
+                    <div key={memory.id} className="p-4 rounded-lg bg-gray-800/50 relative group">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => deleteMemory(memory.id)}
+                      >
+                        <Trash2 className="h-4 w-4 text-red-400" />
+                      </Button>
+                      <p className="text-sm text-gray-400">{new Date(memory.timestamp).toLocaleString()}</p>
+                      <p className="mt-2 text-indigo-100">{memory.content}</p>
+                      <p className="mt-1 text-xs text-gray-500">Type: {memory.type}</p>
+                    </div>
+                  ))}
+                </div>
               )}
-
-              <div className="space-y-4">
-                {memories.map((memory) => (
-                  <div key={memory.id} className="p-4 rounded-lg bg-gray-800/50 relative group">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={() => deleteMemory(memory.id)}
-                    >
-                      <Trash2 className="h-4 w-4 text-red-400" />
-                    </Button>
-                    <p className="text-sm text-gray-400">{new Date(memory.timestamp).toLocaleString()}</p>
-                    <p className="mt-2 text-indigo-100">{memory.content}</p>
-                    <p className="mt-1 text-xs text-gray-500">Type: {memory.type}</p>
-                  </div>
-                ))}
-              </div>
             </CardContent>
           </Card>
         </div>
