@@ -283,43 +283,43 @@ class GeminiConnection:
                     )
                     response_text = f"Stored memory: {args.get('content', '')[:50]}..."
                     logger.info(f"[GeminiConnection-{self.username}] Stored memory via tool call.")
-            elif func_name == "get_recent_memories":
-                result = self.memory_db.get_recent_memories(
-                    self.username,
-                    args.get("limit", 5)
-                )
-                response_text = f"Here are your recent memories:\n"
-                for i, memory in enumerate(result or [], 1):
-                    response_text += f"{i}. {memory[1][:100]}...\n" # Assuming content at index 1
-                logger.info(f"[GeminiConnection-{self.username}] Retrieved recent memories via tool call.")
-            elif func_name == "search_memories":
-                result = self.memory_db.search_memories(
-                    self.username,
-                    args.get("query", ""),
-                    args.get("limit", 5)
-                )
-                response_text = f"Found {len(result or [])} memories matching '{args.get('query', '')}':\n"
-                for i, memory in enumerate(result or [], 1):
-                    response_text += f"{i}. {memory[1][:100]}...\n" # Assuming content at index 1
-                logger.info(f"[GeminiConnection-{self.username}] Searched memories via tool call.")
-            elif func_name == "delete_memory":
-                memory_id = args.get("memory_id")
-                self.memory_db.delete_memory(memory_id, self.username)
-                response_text = f"Successfully deleted memory ID {memory_id}"
-                logger.info(f"[GeminiConnection-{self.username}] Deleted memory {memory_id} via tool call.")
-            elif func_name == "update_memory":
-                memory_id = args.get("memory_id") # Get memory_id first
-                self.memory_db.update_memory(
-                    memory_id, # Pass the variable
-                    args.get("new_content"),
-                    self.username
-                )
-                response_text = f"Successfully updated memory ID {memory_id}"
-                logger.info(f"[GeminiConnection-{self.username}] Updated memory {memory_id} via tool call.")
-            else:
-                result = {"error": f"Unknown function {func_name}"}
-                response_text = f"Sorry, I don't know how to handle the function '{func_name}'."
-                logger.warning(f"[GeminiConnection-{self.username}] Unknown function call received: {func_name}")
+                elif func_name == "get_recent_memories":
+                    result = self.memory_db.get_recent_memories(
+                        self.username,
+                        args.get("limit", 5)
+                    )
+                    response_text = f"Here are your recent memories:\n"
+                    for i, memory in enumerate(result or [], 1):
+                        response_text += f"{i}. {memory[1][:100]}...\n" # Assuming content at index 1
+                    logger.info(f"[GeminiConnection-{self.username}] Retrieved recent memories via tool call.")
+                elif func_name == "search_memories":
+                    result = self.memory_db.search_memories(
+                        self.username,
+                        args.get("query", ""),
+                        args.get("limit", 5)
+                    )
+                    response_text = f"Found {len(result or [])} memories matching '{args.get('query', '')}':\n"
+                    for i, memory in enumerate(result or [], 1):
+                        response_text += f"{i}. {memory[1][:100]}...\n" # Assuming content at index 1
+                    logger.info(f"[GeminiConnection-{self.username}] Searched memories via tool call.")
+                elif func_name == "delete_memory":
+                    memory_id = args.get("memory_id")
+                    self.memory_db.delete_memory(memory_id, self.username)
+                    response_text = f"Successfully deleted memory ID {memory_id}"
+                    logger.info(f"[GeminiConnection-{self.username}] Deleted memory {memory_id} via tool call.")
+                elif func_name == "update_memory":
+                    memory_id = args.get("memory_id") # Get memory_id first
+                    self.memory_db.update_memory(
+                        memory_id, # Pass the variable
+                        args.get("new_content"),
+                        self.username
+                    )
+                    response_text = f"Successfully updated memory ID {memory_id}"
+                    logger.info(f"[GeminiConnection-{self.username}] Updated memory {memory_id} via tool call.")
+                else:
+                    result = {"error": f"Unknown function {func_name}"}
+                    response_text = f"Sorry, I don't know how to handle the function '{func_name}'."
+                    logger.warning(f"[GeminiConnection-{self.username}] Unknown function call received: {func_name}")
             # End of the if/elif/else chain for function calls inside the try block
             except Exception as e: # This except block handles errors for the try block starting above
                 logger.error(f"[GeminiConnection-{self.username}] Error executing tool function {func_name}: {e}", exc_info=True) # Log traceback
