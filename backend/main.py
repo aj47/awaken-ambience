@@ -715,15 +715,15 @@ async def websocket_endpoint(websocket: WebSocket):
                             except Exception as recon_err:
                                 logger.error(f"[ClientReceiver-{client_id}] Failed to reconnect Gemini: {recon_err}. Skipping audio send.")
                                 continue # Skip sending if reconnect fails
-                       # Check Gemini connection state before sending audio
-                       gemini_ws_state = gemini.ws.state if gemini.ws else 'None'
-                       if gemini.ws and gemini_ws_state == State.OPEN:
-                           try:
-                               await gemini.send_audio(message_content["data"])
-                           except Exception as send_audio_err:
-                               logger.error(f"[ClientReceiver-{client_id}] Error calling gemini.send_audio: {send_audio_err}")
-                       else:
-                            logger.warning(f"[ClientReceiver-{client_id}] Skipping audio send because Gemini WS state is not OPEN (State: {gemini_ws_state}).")
+                        # Check Gemini connection state before sending audio
+                        gemini_ws_state = gemini.ws.state if gemini.ws else 'None'
+                        if gemini.ws and gemini_ws_state == State.OPEN:
+                            try:
+                                await gemini.send_audio(message_content["data"])
+                            except Exception as send_audio_err:
+                                logger.error(f"[ClientReceiver-{client_id}] Error calling gemini.send_audio: {send_audio_err}")
+                        else:
+                             logger.warning(f"[ClientReceiver-{client_id}] Skipping audio send because Gemini WS state is not OPEN (State: {gemini_ws_state}).")
 
 
                     elif msg_type == "image":
