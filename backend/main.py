@@ -322,9 +322,9 @@ class GeminiConnection:
                 logger.warning(f"[GeminiConnection-{self.username}] Unknown function call received: {func_name}")
             # End of the if/elif/else chain for function calls inside the try block
             except Exception as e: # This except block handles errors for the try block starting above
-                 logger.error(f"[GeminiConnection-{self.username}] Error executing tool function {func_name}: {e}", exc_info=True) # Log traceback
-                 result = {"error": f"Error executing function {func_name}: {str(e)}"}
-                 response_text = f"Sorry, there was an error trying to execute the function '{func_name}'."
+                logger.error(f"[GeminiConnection-{self.username}] Error executing tool function {func_name}: {e}", exc_info=True) # Log traceback
+                result = {"error": f"Error executing function {func_name}: {str(e)}"}
+                response_text = f"Sorry, there was an error trying to execute the function '{func_name}'."
             # This runs after the try-except block for the current function call 'f'
 
             responses.append({
