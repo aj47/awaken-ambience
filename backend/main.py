@@ -450,6 +450,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
     username = None
     gemini = None
+    closed_intentionally = False # Flag to prevent double closing
     try:
         # Require authentication for WebSocket
         logger.info(f"[WebSocket-{client_id}] Attempting authentication.")
@@ -457,6 +458,7 @@ async def websocket_endpoint(websocket: WebSocket):
         if not username:
             logger.warning(f"[WebSocket-{client_id}] Authentication failed.")
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            closed_intentionally = True # Mark as closed
             return
         logger.info(f"[WebSocket-{client_id}] Authenticated as user: {username}")
 
@@ -773,11 +775,18 @@ async def websocket_endpoint(websocket: WebSocket):
 
     except WebSocketDisconnect as wsd:
          logger.info(f"[WebSocket-{client_id}] WebSocket disconnected during setup or main loop: {wsd.code} - {wsd.reason}")
+         closed_intentionally = True # Mark as closed on disconnect
     except Exception as e:
         logger.error(f"[WebSocket-{client_id}] Unexpected error in main WebSocket handler: {type(e).__name__} - {str(e)}", exc_info=True)
         # Attempt to close gracefully if possible
-        if websocket.client_state == 1: # CONNECTED
-             await websocket.close(code=status.WS_1011_INTERNAL_ERROR, reason="Server error")
+        if websocket.client_state == WebSocketState.CONNECTED:
+             try:
+                 await websocket.close(code=status.WS_1011_INTERNAL_ERROR, reason="Server error")
+                 closed_intentionally = True # Mark as closed
+             except RuntimeError: # Catch potential double-close error
+                 logger.warning(f"[WebSocket-{client_id}] Error closing websocket in exception handler (already closing?).")
+             except Exception as close_err:
+                 logger.error(f"[WebSocket-{client_id}] Error closing websocket in exception handler: {close_err}")
     finally:
         # Cleanup
         logger.info(f"[WebSocket-{client_id}] Starting cleanup for connection.")
@@ -790,17 +799,19 @@ async def websocket_endpoint(websocket: WebSocket):
         else:
              logger.warning(f"[WebSocket-{client_id}] No connection entry found for cleanup.")
 
-        # Ensure client websocket is closed ONLY if it's still connected
-        if websocket.client_state == WebSocketState.CONNECTED:
-            logger.warning(f"[WebSocket-{client_id}] Client WebSocket state is CONNECTED, attempting close.")
+        # Ensure client websocket is closed ONLY if it's still connected AND wasn't closed intentionally before
+        if not closed_intentionally and websocket.client_state == WebSocketState.CONNECTED:
+            logger.warning(f"[WebSocket-{client_id}] Client WebSocket state is CONNECTED, attempting close in finally.")
             try:
                 await websocket.close(code=status.WS_1001_GOING_AWAY)
+            except RuntimeError: # Catch potential double-close error here too
+                logger.warning(f"[WebSocket-{client_id}] Error closing websocket in finally (already closing?).")
             except Exception as close_err:
                 # Log error during close, but cleanup should continue
                 logger.error(f"[WebSocket-{client_id}] Error during final WebSocket close: {close_err}")
-        elif websocket.client_state != WebSocketState.DISCONNECTED:
+        elif not closed_intentionally and websocket.client_state != WebSocketState.DISCONNECTED:
              # Log if state is unexpected (e.g., CONNECTING) but don't try to close
-             logger.warning(f"[WebSocket-{client_id}] Client WebSocket in unexpected state {websocket.client_state} during cleanup.")
+             logger.warning(f"[WebSocket-{client_id}] Client WebSocket in unexpected state {websocket.client_state} during cleanup (and not intentionally closed).")
 
 
         logger.info(f"[WebSocket-{client_id}] Cleanup complete. Connection fully closed.")
