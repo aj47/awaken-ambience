@@ -274,15 +274,15 @@ class GeminiConnection:
             result = None
             try:
                 if func_name == "store_memory":
-                result = self.memory_db.store_memory(
-                    content=args.get("content", ""),
-                    username=self.username,
-                    type=args.get("type", "conversation"),
+                    result = self.memory_db.store_memory(
+                        content=args.get("content", ""),
+                        username=self.username,
+                        type=args.get("type", "conversation"),
                     context=args.get("context", ""),
-                    tags=args.get("tags", [])
-                )
-                response_text = f"Stored memory: {args.get('content', '')[:50]}..."
-                logger.info(f"[GeminiConnection-{self.username}] Stored memory via tool call.")
+                        tags=args.get("tags", [])
+                    )
+                    response_text = f"Stored memory: {args.get('content', '')[:50]}..."
+                    logger.info(f"[GeminiConnection-{self.username}] Stored memory via tool call.")
             elif func_name == "get_recent_memories":
                 result = self.memory_db.get_recent_memories(
                     self.username,
@@ -308,9 +308,9 @@ class GeminiConnection:
                 response_text = f"Successfully deleted memory ID {memory_id}"
                 logger.info(f"[GeminiConnection-{self.username}] Deleted memory {memory_id} via tool call.")
             elif func_name == "update_memory":
+                memory_id = args.get("memory_id") # Get memory_id first
                 self.memory_db.update_memory(
-                    args.get("memory_id"),
-                    memory_id := args.get("memory_id"),
+                    memory_id, # Pass the variable
                     args.get("new_content"),
                     self.username
                 )
@@ -529,24 +529,24 @@ async def websocket_endpoint(websocket: WebSocket):
                         updated_config = message_content.get("config", {})
 
                         # Ensure all required config fields are present
-                            default_config = {
-                                "systemPrompt": "You are a friendly AI assistant.",
-                                "voice": "Puck",
-                                "googleSearch": True,
+                        default_config = {
+                            "systemPrompt": "You are a friendly AI assistant.",
+                            "voice": "Puck",
+                            "googleSearch": True,
                                 "allowInterruptions": True,
                                 "isWakeWordEnabled": False,
                                 "wakeWord": "",
-                                "cancelPhrase": ""
-                            }
-                            
-                            # Merge with defaults for any missing fields
-                            for key, value in default_config.items():
-                                if key not in updated_config:
-                                    updated_config[key] = value
-                            # Update the configuration
-                            gemini.set_config(updated_config)
+                            "cancelPhrase": ""
+                        }
 
-                            # Save to database
+                        # Merge with defaults for any missing fields
+                        for key, value in default_config.items():
+                            if key not in updated_config:
+                                updated_config[key] = value
+                        # Update the configuration
+                        gemini.set_config(updated_config)
+
+                        # Save to database
                             memory_db.update_user_config(username, updated_config)
                             logger.info(f"[ClientReceiver-{client_id}] Updated config saved to database for user {username}")
 
