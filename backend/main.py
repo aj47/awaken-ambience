@@ -573,12 +573,34 @@ async def websocket_endpoint(websocket: WebSocket):
                             except Exception as recon_err:
                                 logger.error(f"[ClientReceiver-{client_id}] Failed to reconnect Gemini: {recon_err}. Skipping audio send.")
                                 continue # Skip sending if reconnect fails
+                        
+                        # ADDED: More detailed check and logging
+                        gemini_ws_state = gemini.ws.state if gemini.ws else 'None'
+                        logger.debug(f"[ClientReceiver-{client_id}] Gemini WS state before attempting send: {gemini_ws_state}")
+                        if gemini.ws and gemini_ws_state == State.OPEN:
+                            logger.debug(f"[ClientReceiver-{client_id}] Attempting to forward audio data to Gemini.")
+                            try:
+                                await gemini.send_audio(message_content["data"])
+                                logger.debug(f"[ClientReceiver-{client_id}] Successfully forwarded audio data to Gemini.")
+                            except Exception as send_audio_err:
+                                logger.error(f"[ClientReceiver-{client_id}] Error calling gemini.send_audio: {send_audio_err}")
+                        else:
+                            logger.warning(f"[ClientReceiver-{client_id}] Skipping audio send because Gemini WS state is not OPEN (State: {gemini_ws_state}).")
 
-                        logger.debug(f"[ClientReceiver-{client_id}] Forwarding audio data to Gemini.")
-                        await gemini.send_audio(message_content["data"])
 
                     elif msg_type == "image":
-                        logger.debug(f"[ClientReceiver-{client_id}] Forwarding image data to Gemini.")
+                        # ADDED: Similar check for image sending
+                        gemini_ws_state = gemini.ws.state if gemini.ws else 'None'
+                        logger.debug(f"[ClientReceiver-{client_id}] Gemini WS state before attempting send image: {gemini_ws_state}")
+                        if gemini.ws and gemini_ws_state == State.OPEN:
+                            logger.debug(f"[ClientReceiver-{client_id}] Attempting to forward image data to Gemini.")
+                            try:
+                                await gemini.send_image(message_content["data"])
+                                logger.debug(f"[ClientReceiver-{client_id}] Successfully forwarded image data to Gemini.")
+                            except Exception as send_image_err:
+                                logger.error(f"[ClientReceiver-{client_id}] Error calling gemini.send_image: {send_image_err}")
+                        else:
+                             logger.warning(f"[ClientReceiver-{client_id}] Skipping image send because Gemini WS state is not OPEN (State: {gemini_ws_state}).")
                         await gemini.send_image(message_content["data"])
 
                     elif msg_type == "interrupt":
