@@ -456,10 +456,10 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.info(f"[WebSocket-{client_id}] Attempting authentication.")
         username = await get_current_user_websocket(websocket)
         if not username:
-            logger.warning(f"[WebSocket-{client_id}] Authentication failed.")
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-            closed_intentionally = True # Mark as closed
-            return
+            logger.warning(f"[WebSocket-{client_id}] Authentication failed. Preparing to close.")
+            # Don't close here directly, let finally handle it.
+            closed_intentionally = True # Mark intent to close
+            return # Exit the try block
         logger.info(f"[WebSocket-{client_id}] Authenticated as user: {username}")
 
         gemini = GeminiConnection()
