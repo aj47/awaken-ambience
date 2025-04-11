@@ -842,7 +842,8 @@ async def websocket_endpoint(websocket: WebSocket):
 
                         # Forward parts (like audio) to the client
                         for p in parts:
-                            if websocket.client_state != 1: # Check connection again before sending
+                            # Check client connection state before sending
+                            if websocket.client_state != WebSocketState.CONNECTED: # Check connection again before sending
                                 logger.warning(f"[GeminiReceiver-{client_id}] Client WebSocket disconnected before sending part. Aborting send.")
                                 break # Stop sending parts if client disconnected
 
@@ -879,7 +880,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         else:
                             logger.info(f"[GeminiReceiver-{client_id}] Turn complete. Sending confirmation to client.")
                             try:
-                                if websocket.client_state == 1: # Check connection before sending
+                                if websocket.client_state == WebSocketState.CONNECTED: # Check connection before sending
                                     await websocket.send_json({
                                         "type": "turn_complete",
                                         "data": True
