@@ -209,7 +209,8 @@ class GeminiConnection:
 
     async def send_audio(self, audio_data: str):
         """Send audio data to Gemini"""
-        if not self.ws or self.ws.closed:
+        # Check Gemini connection state correctly
+        if not self.ws or self.ws.state == State.CLOSED:
             logger.warning(f"[GeminiConnection-{self.username}] Attempted to send audio while WebSocket is closed or None.")
             return
 
@@ -232,7 +233,8 @@ class GeminiConnection:
 
     async def receive(self):
         """Receive message from Gemini"""
-        if not self.ws or self.ws.closed:
+        # Check Gemini connection state correctly
+        if not self.ws or self.ws.state == State.CLOSED:
             logger.warning(f"[GeminiConnection-{self.username}] Attempted to receive while WebSocket is closed or None.")
             raise WebSocketDisconnect(code=1000, reason="Gemini WS closed") # Signal closure
 
@@ -372,7 +374,8 @@ class GeminiConnection:
 
     async def send_image(self, image_data: str):
         """Send image data to Gemini"""
-        if not self.ws or self.ws.closed:
+        # Check Gemini connection state correctly
+        if not self.ws or self.ws.state == State.CLOSED:
             logger.warning(f"[GeminiConnection-{self.username}] Attempted to send image while WebSocket is closed or None.")
             return
 
@@ -560,7 +563,8 @@ async def websocket_endpoint(websocket: WebSocket):
                                 logger.info(f"[ClientReceiver-{client_id}] Audio received after interrupt, resuming generation.")
                                 gemini.interrupted = False # Resume with a new generation if audio arrives after an interrupt
 
-                        if not gemini.ws or gemini.ws.closed:
+                        # Check Gemini connection state correctly
+                        if not gemini.ws or gemini.ws.state == State.CLOSED:
                             logger.warning(f"[ClientReceiver-{client_id}] Gemini connection is closed. Attempting to reconnect before sending audio.")
                             try:
                                 await gemini.connect()
@@ -616,7 +620,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     # Removed the initial client state check - rely on gemini.receive() or websocket.send_json() to raise exception
 
                     # Check Gemini WebSocket state before receiving
-                    if not gemini.ws or gemini.ws.closed:
+                    if not gemini.ws or gemini.ws.state == State.CLOSED:
                          logger.warning(f"[GeminiReceiver-{client_id}] Gemini WebSocket is closed or None. Exiting loop.")
                          break
 
