@@ -1,5 +1,6 @@
 import logging
 from fastapi import FastAPI, WebSocket, HTTPException, Depends, status, Request, WebSocketDisconnect
+from starlette.websockets import WebSocketState # Added import
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from security import get_current_user_websocket, create_access_token, authenticate_user, get_password_hash, ACCESS_TOKEN_EXPIRE_MINUTES
@@ -11,8 +12,8 @@ import json
 import os
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-from websockets import connect
-from websockets.connection import State # Added import
+from websockets import connect, exceptions as ws_exceptions # Added exceptions import
+from websockets.connection import State
 from typing import Dict
 from db import MemoryDB
 
@@ -708,10 +709,15 @@ async def websocket_endpoint(websocket: WebSocket):
                                 logger.error(f"[GeminiReceiver-{client_id}] Error sending turn_complete to client: {send_err}")
                                 break # Assume client disconnected
 
-
+                except ws_exceptions.ConnectionClosedOK:
+                    logger.info(f"[GeminiReceiver-{client_id}] Gemini WebSocket closed cleanly (OK). Exiting loop.")
+                    break # Expected during clean shutdown/reconnect
+                except ws_exceptions.ConnectionClosedError as wse:
+                    logger.warning(f"[GeminiReceiver-{client_id}] Gemini WebSocket closed with error: {wse.code} - {wse.reason}. Exiting loop.")
+                    break # Unexpected closure
                 except WebSocketDisconnect as wsd:
-                    # This happens if gemini.receive() detects Gemini WS closed
-                    logger.info(f"[GeminiReceiver-{client_id}] Gemini WebSocket disconnected: {wsd.code} - {wsd.reason}. Exiting loop.")
+                    # This happens if gemini.receive() detects Gemini WS closed (potentially redundant now)
+                    logger.info(f"[GeminiReceiver-{client_id}] Gemini WebSocket disconnected (WebSocketDisconnect): {wsd.code} - {wsd.reason}. Exiting loop.")
                     break
                 except json.JSONDecodeError as e:
                     logger.error(f"[GeminiReceiver-{client_id}] JSON decode error processing Gemini message: {e}. Message: {msg[:100]}...")
