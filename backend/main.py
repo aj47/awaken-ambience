@@ -552,12 +552,12 @@ async def websocket_endpoint(websocket: WebSocket):
 
                         # Reconnect to Gemini with new config if needed
                         logger.info(f"[ClientReceiver-{client_id}] Reconnecting Gemini due to config change.")
-                            await gemini.close() # Close existing connection first
-                            await gemini.connect() # Establish new connection
-                            logger.info(f"[ClientReceiver-{client_id}] Gemini reconnected successfully.")
+                        await gemini.close() # Close existing connection first
+                        await gemini.connect() # Establish new connection
+                        logger.info(f"[ClientReceiver-{client_id}] Gemini reconnected successfully.")
 
-                        elif msg_type == "audio":
-                            if gemini.interrupted:
+                    elif msg_type == "audio":
+                        if gemini.interrupted:
                                 logger.info(f"[ClientReceiver-{client_id}] Audio received after interrupt, resuming generation.")
                                 gemini.interrupted = False # Resume with a new generation if audio arrives after an interrupt
 
