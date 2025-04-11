@@ -547,11 +547,11 @@ async def websocket_endpoint(websocket: WebSocket):
                         gemini.set_config(updated_config)
 
                         # Save to database
-                            memory_db.update_user_config(username, updated_config)
-                            logger.info(f"[ClientReceiver-{client_id}] Updated config saved to database for user {username}")
+                        memory_db.update_user_config(username, updated_config)
+                        logger.info(f"[ClientReceiver-{client_id}] Updated config saved to database for user {username}")
 
-                            # Reconnect to Gemini with new config if needed
-                            logger.info(f"[ClientReceiver-{client_id}] Reconnecting Gemini due to config change.")
+                        # Reconnect to Gemini with new config if needed
+                        logger.info(f"[ClientReceiver-{client_id}] Reconnecting Gemini due to config change.")
                             await gemini.close() # Close existing connection first
                             await gemini.connect() # Establish new connection
                             logger.info(f"[ClientReceiver-{client_id}] Gemini reconnected successfully.")
