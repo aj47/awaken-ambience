@@ -84,7 +84,6 @@ class GeminiConnection:
         try:
             memories = self.memory_db.get_all_memories(self.username)
             memory_context = "\n".join([f"- {memory[1]}" for memory in memories]) # Assuming memory content is at index 1
-            logger.debug(f"[GeminiConnection-{self.username}] Fetched {len(memories)} memories.")
         except Exception as e:
             logger.error(f"[GeminiConnection-{self.username}] Error fetching memories: {e}")
             memory_context = "Could not retrieve memories."
@@ -183,7 +182,6 @@ class GeminiConnection:
         }
         try:
             await self.ws.send(json.dumps(setup_message))
-            logger.debug(f"[GeminiConnection-{self.username}] Setup message sent: {json.dumps(setup_message)}")
 
             # Wait for setup completion
             logger.info(f"[GeminiConnection-{self.username}] Waiting for setup response.")
@@ -215,7 +213,6 @@ class GeminiConnection:
             logger.warning(f"[GeminiConnection-{self.username}] Attempted to send audio while WebSocket is closed or None.")
             return
 
-        logger.debug(f"[GeminiConnection-{self.username}] Sending audio data ({len(audio_data)} bytes).")
         realtime_input_msg = {
             "realtime_input": {
                 "media_chunks": [
@@ -239,10 +236,8 @@ class GeminiConnection:
             logger.warning(f"[GeminiConnection-{self.username}] Attempted to receive while WebSocket is closed or None.")
             raise WebSocketDisconnect(code=1000, reason="Gemini WS closed") # Signal closure
 
-        logger.debug(f"[GeminiConnection-{self.username}] Waiting to receive message from Gemini.")
         try:
             message = await self.ws.recv()
-            logger.debug(f"[GeminiConnection-{self.username}] Received message from Gemini: {message[:100]}...")
             return message
         except Exception as e:
             logger.error(f"[GeminiConnection-{self.username}] Error receiving message from Gemini: {e}")
@@ -380,7 +375,6 @@ class GeminiConnection:
             logger.warning(f"[GeminiConnection-{self.username}] Attempted to send image while WebSocket is closed or None.")
             return
 
-        logger.debug(f"[GeminiConnection-{self.username}] Sending image data ({len(image_data)} bytes).")
         image_message = {
             "realtime_input": {
                 "media_chunks": [
@@ -527,10 +521,8 @@ async def websocket_endpoint(websocket: WebSocket):
                          logger.warning(f"[GeminiReceiver-{client_id}] Gemini WebSocket is closed or None. Exiting loop.")
                          break
 
-                    logger.debug(f"[GeminiReceiver-{client_id}] Waiting for message from Gemini.")
                     msg = await gemini.receive() # This now raises WebSocketDisconnect if Gemini closes
                     response = json.loads(msg)
-                    logger.debug(f"[GeminiReceiver-{client_id}] Received from Gemini: {response}") # Log full response if debug level allows
 
                     if "toolCall" in response:
                         logger.info(f"[GeminiReceiver-{client_id}] Received tool call from Gemini.")
@@ -559,8 +551,6 @@ async def websocket_endpoint(websocket: WebSocket):
                             # Assuming the first candidate is the one we want
                             candidate = content.get("candidates", [{}])[0]
                             parts = candidate.get("content", {}).get("parts", [])
-                        else:
-                            logger.debug(f"[GeminiReceiver-{client_id}] No 'modelTurn' or 'candidates' in serverContent.")
 
 
                         # Forward parts (like audio) to the client
@@ -578,7 +568,6 @@ async def websocket_endpoint(websocket: WebSocket):
                             if "inlineData" in p and "data" in p["inlineData"]:
                                 data = p['inlineData']['data']
                                 mime_type = p['inlineData'].get('mimeType', 'audio/pcm') # Default to audio if not specified
-                                logger.debug(f"[GeminiReceiver-{client_id}] Sending {mime_type} response ({len(data)} bytes) to client.")
                                 try:
                                     # Check client connection state again just before sending
                                     if websocket.client_state == WebSocketState.CONNECTED:
@@ -595,10 +584,8 @@ async def websocket_endpoint(websocket: WebSocket):
                                      break # Stop trying to send parts
 
                             elif "text" in p:
-                                logger.debug(f"[GeminiReceiver-{client_id}] Received text part (not forwarded directly): {p['text'][:50]}...")
-                                # Optionally send text parts if needed by frontend:
-                                # if websocket.client_state == WebSocketState.CONNECTED:
-                                #    await websocket.send_json({"type": "text", "data": p["text"]})
+                                # Text parts are not forwarded directly, but logged in GeminiConnection if needed
+                                pass
 
 
                     # Handle turn completion
@@ -655,9 +642,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     if websocket.client_state != WebSocketState.CONNECTED:
                         logger.warning(f"[ClientReceiver-{client_id}] Client WebSocket is not connected ({websocket.client_state}). Exiting loop.")
                         break
-                    logger.debug(f"[ClientReceiver-{client_id}] Waiting for message from client.")
                     message_text = await websocket.receive_text()
-                    logger.debug(f"[ClientReceiver-{client_id}] Received raw message: {message_text[:100]}...") # Log truncated
 
                     message_content = json.loads(message_text)
                     msg_type = message_content.get("type")
@@ -730,35 +715,27 @@ async def websocket_endpoint(websocket: WebSocket):
                             except Exception as recon_err:
                                 logger.error(f"[ClientReceiver-{client_id}] Failed to reconnect Gemini: {recon_err}. Skipping audio send.")
                                 continue # Skip sending if reconnect fails
-                        
-                        # ADDED: More detailed check and logging
-                        gemini_ws_state = gemini.ws.state if gemini.ws else 'None'
-                        logger.debug(f"[ClientReceiver-{client_id}] Gemini WS state before attempting send: {gemini_ws_state}")
-                        if gemini.ws and gemini_ws_state == State.OPEN:
-                            logger.debug(f"[ClientReceiver-{client_id}] Attempting to forward audio data to Gemini.")
-                            try:
-                                await gemini.send_audio(message_content["data"])
-                                logger.debug(f"[ClientReceiver-{client_id}] Successfully forwarded audio data to Gemini.")
-                            except Exception as send_audio_err:
-                                logger.error(f"[ClientReceiver-{client_id}] Error calling gemini.send_audio: {send_audio_err}")
-                        else:
+                       # Check Gemini connection state before sending audio
+                       gemini_ws_state = gemini.ws.state if gemini.ws else 'None'
+                       if gemini.ws and gemini_ws_state == State.OPEN:
+                           try:
+                               await gemini.send_audio(message_content["data"])
+                           except Exception as send_audio_err:
+                               logger.error(f"[ClientReceiver-{client_id}] Error calling gemini.send_audio: {send_audio_err}")
+                       else:
                             logger.warning(f"[ClientReceiver-{client_id}] Skipping audio send because Gemini WS state is not OPEN (State: {gemini_ws_state}).")
 
 
                     elif msg_type == "image":
-                        # ADDED: Similar check for image sending
-                        gemini_ws_state = gemini.ws.state if gemini.ws else 'None'
-                        logger.debug(f"[ClientReceiver-{client_id}] Gemini WS state before attempting send image: {gemini_ws_state}")
-                        if gemini.ws and gemini_ws_state == State.OPEN:
-                            logger.debug(f"[ClientReceiver-{client_id}] Attempting to forward image data to Gemini.")
-                            try:
-                                await gemini.send_image(message_content["data"])
-                                logger.debug(f"[ClientReceiver-{client_id}] Successfully forwarded image data to Gemini.")
-                            except Exception as send_image_err:
-                                logger.error(f"[ClientReceiver-{client_id}] Error calling gemini.send_image: {send_image_err}")
-                        else:
-                             logger.warning(f"[ClientReceiver-{client_id}] Skipping image send because Gemini WS state is not OPEN (State: {gemini_ws_state}).")
-                        await gemini.send_image(message_content["data"])
+                       # Check Gemini connection state before sending image
+                       gemini_ws_state = gemini.ws.state if gemini.ws else 'None'
+                       if gemini.ws and gemini_ws_state == State.OPEN:
+                           try:
+                               await gemini.send_image(message_content["data"])
+                           except Exception as send_image_err:
+                               logger.error(f"[ClientReceiver-{client_id}] Error calling gemini.send_image: {send_image_err}")
+                       else:
+                            logger.warning(f"[ClientReceiver-{client_id}] Skipping image send because Gemini WS state is not OPEN (State: {gemini_ws_state}).")
 
                     elif msg_type == "interrupt":
                         logger.info(f"[ClientReceiver-{client_id}] Received interrupt command from client.")
@@ -992,7 +969,6 @@ async def get_memories(request: Request):
     logger.info("Received request for /memories")
     try:
         token = request.headers.get("Authorization", "").replace("Bearer ", "")
-        logger.debug(f"Token received: {'present' if token else 'missing'}")
 
         if not token:
             logger.warning("Authentication token missing")
@@ -1020,7 +996,6 @@ async def get_memory(memory_id: int, request: Request):
     logger.info(f"Received request for /memories/{memory_id}")
     try:
         token = request.headers.get("Authorization", "").replace("Bearer ", "")
-        logger.debug(f"Token received: {'present' if token else 'missing'}")
 
         if not token:
             logger.warning(f"Authentication token missing for /memories/{memory_id}")
@@ -1066,7 +1041,6 @@ async def delete_memory(memory_id: int, request: Request):
     logger.info(f"Received request to delete /memories/{memory_id}")
     try:
         token = request.headers.get("Authorization", "").replace("Bearer ", "")
-        logger.debug(f"Token received: {'present' if token else 'missing'}")
 
         if not token:
             logger.warning(f"Authentication token missing for DELETE /memories/{memory_id}")
@@ -1097,7 +1071,6 @@ async def update_config(request: Request):
     logger.info("Received request to POST /config")
     try:
         token = request.headers.get("Authorization", "").replace("Bearer ", "")
-        logger.debug(f"Token received: {'present' if token else 'missing'}")
 
         if not token:
             logger.warning("Authentication token missing for POST /config")
@@ -1113,7 +1086,6 @@ async def update_config(request: Request):
         # Get the request body
         try:
             config_data = await request.json()
-            logger.debug(f"Received config data: {config_data}")
         except json.JSONDecodeError:
             logger.error("Failed to decode JSON body for POST /config")
             raise HTTPException(status_code=400, detail="Invalid JSON format")
@@ -1157,7 +1129,6 @@ async def get_config(request: Request):
     logger.info("Received request for GET /config")
     try:
         token = request.headers.get("Authorization", "").replace("Bearer ", "")
-        logger.debug(f"Token received: {'present' if token else 'missing'}")
 
         if not token:
             logger.warning("Authentication token missing for GET /config")
