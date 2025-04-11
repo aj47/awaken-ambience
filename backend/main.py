@@ -12,6 +12,7 @@ import os
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from websockets import connect
+from websockets.connection import State # Added import
 from typing import Dict
 from db import MemoryDB
 
@@ -247,16 +248,18 @@ class GeminiConnection:
 
     async def close(self):
         """Close the connection"""
-        if self.ws and not self.ws.closed:
+        # Use self.ws.state to check connection status correctly
+        if self.ws and self.ws.state != State.CLOSED:
             logger.info(f"[GeminiConnection-{self.username}] Closing Gemini websocket connection.")
             try:
-                await self.ws.close()
+                # Add a timeout to close to prevent hanging
+                await asyncio.wait_for(self.ws.close(), timeout=5.0)
                 logger.info(f"[GeminiConnection-{self.username}] Gemini websocket connection closed.")
             except Exception as e:
                 logger.error(f"[GeminiConnection-{self.username}] Error closing Gemini websocket: {e}")
             finally:
                 self.ws = None
-        elif self.ws and self.ws.closed:
+        elif self.ws and self.ws.state == State.CLOSED: # Check state correctly here too
              logger.info(f"[GeminiConnection-{self.username}] Gemini websocket connection already closed.")
              self.ws = None
         else:
@@ -510,11 +513,7 @@ async def websocket_endpoint(websocket: WebSocket):
         async def receive_from_client():
             while True:
                 try:
-                    # Check if connection is closed before receiving
-                    if websocket.client_state != 1: # WebSocketState.CONNECTED
-                        logger.warning(f"[ClientReceiver-{client_id}] WebSocket no longer connected (state: {websocket.client_state}). Exiting loop.")
-                        break
-
+                    # Removed the initial state check - rely on receive_text() to raise exception on disconnect
                     logger.debug(f"[ClientReceiver-{client_id}] Waiting for message from client.")
                     message_text = await websocket.receive_text()
                     logger.debug(f"[ClientReceiver-{client_id}] Received raw message: {message_text[:100]}...") # Log truncated
@@ -614,10 +613,7 @@ async def websocket_endpoint(websocket: WebSocket):
         async def receive_from_gemini():
             while True:
                 try:
-                    # Check client WebSocket state before attempting to receive from Gemini
-                    if websocket.client_state != 1: # WebSocketState.CONNECTED
-                        logger.warning(f"[GeminiReceiver-{client_id}] Client WebSocket no longer connected (state: {websocket.client_state}). Exiting loop.")
-                        break
+                    # Removed the initial client state check - rely on gemini.receive() or websocket.send_json() to raise exception
 
                     # Check Gemini WebSocket state before receiving
                     if not gemini.ws or gemini.ws.closed:
