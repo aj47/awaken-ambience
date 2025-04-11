@@ -561,34 +561,34 @@ async def websocket_endpoint(websocket: WebSocket):
                                 logger.info(f"[ClientReceiver-{client_id}] Audio received after interrupt, resuming generation.")
                                 gemini.interrupted = False # Resume with a new generation if audio arrives after an interrupt
 
-                            if not gemini.ws or gemini.ws.closed:
-                                logger.warning(f"[ClientReceiver-{client_id}] Gemini connection is closed. Attempting to reconnect before sending audio.")
-                                try:
-                                    await gemini.connect()
-                                    logger.info(f"[ClientReceiver-{client_id}] Gemini reconnected successfully.")
-                                except Exception as recon_err:
-                                    logger.error(f"[ClientReceiver-{client_id}] Failed to reconnect Gemini: {recon_err}. Skipping audio send.")
-                                    continue # Skip sending if reconnect fails
+                        if not gemini.ws or gemini.ws.closed:
+                            logger.warning(f"[ClientReceiver-{client_id}] Gemini connection is closed. Attempting to reconnect before sending audio.")
+                            try:
+                                await gemini.connect()
+                                logger.info(f"[ClientReceiver-{client_id}] Gemini reconnected successfully.")
+                            except Exception as recon_err:
+                                logger.error(f"[ClientReceiver-{client_id}] Failed to reconnect Gemini: {recon_err}. Skipping audio send.")
+                                continue # Skip sending if reconnect fails
 
-                            logger.debug(f"[ClientReceiver-{client_id}] Forwarding audio data to Gemini.")
-                            await gemini.send_audio(message_content["data"])
+                        logger.debug(f"[ClientReceiver-{client_id}] Forwarding audio data to Gemini.")
+                        await gemini.send_audio(message_content["data"])
 
-                        elif msg_type == "image":
-                            logger.debug(f"[ClientReceiver-{client_id}] Forwarding image data to Gemini.")
-                            await gemini.send_image(message_content["data"])
+                    elif msg_type == "image":
+                        logger.debug(f"[ClientReceiver-{client_id}] Forwarding image data to Gemini.")
+                        await gemini.send_image(message_content["data"])
 
-                        elif msg_type == "interrupt":
-                            logger.info(f"[ClientReceiver-{client_id}] Received interrupt command from client.")
-                            gemini.interrupted = True # Mark the current generation as canceled
-                            logger.info(f"[ClientReceiver-{client_id}] Sending interrupt confirmation to client.")
-                            await websocket.send_json({
-                                "type": "interrupt",
-                                "message": "Generation canceled."
-                            })
-                            continue # Don't process further in this loop iteration
+                    elif msg_type == "interrupt":
+                        logger.info(f"[ClientReceiver-{client_id}] Received interrupt command from client.")
+                        gemini.interrupted = True # Mark the current generation as canceled
+                        logger.info(f"[ClientReceiver-{client_id}] Sending interrupt confirmation to client.")
+                        await websocket.send_json({
+                            "type": "interrupt",
+                            "message": "Generation canceled."
+                        })
+                        continue # Don't process further in this loop iteration
 
-                        else:
-                            logger.warning(f"[ClientReceiver-{client_id}] Unknown message type received: {msg_type}")
+                    else:
+                        logger.warning(f"[ClientReceiver-{client_id}] Unknown message type received: {msg_type}")
 
                 except WebSocketDisconnect as wsd:
                     logger.info(f"[ClientReceiver-{client_id}] WebSocket disconnected: {wsd.code} - {wsd.reason}")
