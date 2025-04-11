@@ -768,13 +768,18 @@ async def websocket_endpoint(websocket: WebSocket):
         else:
              logger.warning(f"[WebSocket-{client_id}] No connection entry found for cleanup.")
 
-        # Ensure client websocket is closed if not already
-        if websocket.client_state != 3: # CLOSED
-            logger.warning(f"[WebSocket-{client_id}] Client WebSocket state is {websocket.client_state}, attempting close.")
+        # Ensure client websocket is closed ONLY if it's still connected
+        if websocket.client_state == WebSocketState.CONNECTED:
+            logger.warning(f"[WebSocket-{client_id}] Client WebSocket state is CONNECTED, attempting close.")
             try:
                 await websocket.close(code=status.WS_1001_GOING_AWAY)
             except Exception as close_err:
+                # Log error during close, but cleanup should continue
                 logger.error(f"[WebSocket-{client_id}] Error during final WebSocket close: {close_err}")
+        elif websocket.client_state != WebSocketState.DISCONNECTED:
+             # Log if state is unexpected (e.g., CONNECTING) but don't try to close
+             logger.warning(f"[WebSocket-{client_id}] Client WebSocket in unexpected state {websocket.client_state} during cleanup.")
+
 
         logger.info(f"[WebSocket-{client_id}] Cleanup complete. Connection fully closed.")
 
