@@ -956,15 +956,17 @@ async def websocket_endpoint(websocket: WebSocket):
                  # Log error, but continue cleanup
                  logger.error(f"[WebSocket-{client_id}] Error awaiting cancelled Gemini task during cleanup: {task_cancel_err}")
 
-        # Close Gemini connection and remove from active connections
+        # Close Gemini connection using the 'gemini' variable from the try block scope
+        if gemini:
+             logger.info(f"[WebSocket-{client_id}] Closing Gemini connection instance.")
+             await gemini.close()
+        # Remove from active connections dict (redundant if pop was used, but safe)
         if client_id in connections:
-            logger.info(f"[WebSocket-{client_id}] Closing associated Gemini connection.")
-            gemini_conn = connections.pop(client_id) # Use pop to remove the entry
-            await gemini_conn.close() # Ensure Gemini connection is closed
-            del connections[client_id]
-            logger.info(f"[WebSocket-{client_id}] Removed connection entry.")
+             del connections[client_id]
+             logger.info(f"[WebSocket-{client_id}] Removed connection entry for {client_id}.")
         else:
-             logger.warning(f"[WebSocket-{client_id}] No connection entry found for cleanup.")
+             # This might happen if cleanup occurs after an error before connection was added
+             logger.warning(f"[WebSocket-{client_id}] No connection entry found in dict for cleanup.")
 
         # Ensure client websocket is closed ONLY if it's still connected AND wasn't closed intentionally before
         if not closed_intentionally and websocket.client_state == WebSocketState.CONNECTED:
