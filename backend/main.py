@@ -515,11 +515,146 @@ async def websocket_endpoint(websocket: WebSocket):
         await gemini.connect()
         logger.info(f"[WebSocket-{client_id}] Gemini connection initialized successfully.")
 
-        # Handle bidirectional communication
+        gemini_receive_task = None # Task handle for the Gemini receiver
+
+        # Define receiver functions within the endpoint scope
+        async def receive_from_gemini():
+            nonlocal gemini_receive_task # To allow setting to None on exit
+            try:
+                while True:
+                    # Check Gemini WebSocket state before receiving
+                    if not gemini.ws or gemini.ws.state == State.CLOSED:
+                         logger.warning(f"[GeminiReceiver-{client_id}] Gemini WebSocket is closed or None. Exiting loop.")
+                         break
+
+                    logger.debug(f"[GeminiReceiver-{client_id}] Waiting for message from Gemini.")
+                    msg = await gemini.receive() # This now raises WebSocketDisconnect if Gemini closes
+                    response = json.loads(msg)
+                    logger.debug(f"[GeminiReceiver-{client_id}] Received from Gemini: {response}") # Log full response if debug level allows
+
+                    if "toolCall" in response:
+                        logger.info(f"[GeminiReceiver-{client_id}] Received tool call from Gemini.")
+                        await gemini.handle_tool_call(response["toolCall"])
+                        continue # Handled tool call, wait for next message
+
+                    # Process server content
+                    if "serverContent" in response:
+                        content = response["serverContent"]
+                        parts = []
+                        if "modelTurn" in content:
+                            parts = content["modelTurn"].get("parts", [])
+                            # Store meaningful text responses from modelTurn
+                            if any("text" in p for p in parts):
+                                logger.info("[Memory] Storing modelTurn response")
+                                try:
+                                     memory_db.store_memory(
+                                         content=json.dumps(content["modelTurn"]),
+                                         username=username, # Ensure username is passed
+                                         type="response"
+                                     )
+                                except Exception as db_err:
+                                     logger.error(f"[Memory] Error storing response: {db_err}")
+
+                        elif "candidates" in content:
+                            # Assuming the first candidate is the one we want
+                            candidate = content.get("candidates", [{}])[0]
+                            parts = candidate.get("content", {}).get("parts", [])
+                        else:
+                            logger.debug(f"[GeminiReceiver-{client_id}] No 'modelTurn' or 'candidates' in serverContent.")
+
+
+                        # Forward parts (like audio) to the client
+                        for p in parts:
+                            # Check client connection state before sending
+                            if websocket.client_state != WebSocketState.CONNECTED:
+                                logger.warning(f"[GeminiReceiver-{client_id}] Client WebSocket disconnected before sending part. Aborting send.")
+                                break # Stop sending parts if client disconnected
+
+                            # If an interrupt was issued, skip sending any remaining audio chunks.
+                            if gemini.interrupted:
+                                logger.info(f"[GeminiReceiver-{client_id}] Interrupt active, skipping sending part.")
+                                continue
+
+                            if "inlineData" in p and "data" in p["inlineData"]:
+                                data = p['inlineData']['data']
+                                mime_type = p['inlineData'].get('mimeType', 'audio/pcm') # Default to audio if not specified
+                                logger.debug(f"[GeminiReceiver-{client_id}] Sending {mime_type} response ({len(data)} bytes) to client.")
+                                try:
+                                    # Check client connection state again just before sending
+                                    if websocket.client_state == WebSocketState.CONNECTED:
+                                        await websocket.send_json({
+                                            "type": mime_type.split('/')[0], # "audio" or "video" etc.
+                                            "data": data
+                                        })
+                                    else:
+                                        logger.warning(f"[GeminiReceiver-{client_id}] Client disconnected right before sending {mime_type} data.")
+                                        break # Exit inner loop if client disconnected
+                                except Exception as send_err:
+                                     logger.error(f"[GeminiReceiver-{client_id}] Error sending data part to client: {send_err}")
+                                     # If sending fails, assume client disconnected
+                                     break # Stop trying to send parts
+
+                            elif "text" in p:
+                                logger.debug(f"[GeminiReceiver-{client_id}] Received text part (not forwarded directly): {p['text'][:50]}...")
+                                # Optionally send text parts if needed by frontend:
+                                # if websocket.client_state == WebSocketState.CONNECTED:
+                                #    await websocket.send_json({"type": "text", "data": p["text"]})
+
+
+                    # Handle turn completion
+                    if response.get("serverContent", {}).get("turnComplete"):
+                        if gemini.interrupted:
+                             logger.info(f"[GeminiReceiver-{client_id}] Turn complete received, but interrupt was active. Resetting interrupt flag.")
+                             gemini.interrupted = False # Reset interrupt flag after turn completion signal
+                        else:
+                            logger.info(f"[GeminiReceiver-{client_id}] Turn complete. Sending confirmation to client.")
+                            try:
+                                if websocket.client_state == WebSocketState.CONNECTED: # Check connection before sending
+                                    await websocket.send_json({
+                                        "type": "turn_complete",
+                                        "data": True
+                                    })
+                            except Exception as send_err:
+                                logger.error(f"[GeminiReceiver-{client_id}] Error sending turn_complete to client: {send_err}")
+                                break # Assume client disconnected
+
+            except ws_exceptions.ConnectionClosedOK:
+                logger.info(f"[GeminiReceiver-{client_id}] Gemini WebSocket closed cleanly (OK). Exiting loop.")
+            except ws_exceptions.ConnectionClosedError as wse:
+                logger.warning(f"[GeminiReceiver-{client_id}] Gemini WebSocket closed with error: {wse.code} - {wse.reason}. Exiting loop.")
+            except WebSocketDisconnect as wsd:
+                # This happens if gemini.receive() detects Gemini WS closed
+                logger.info(f"[GeminiReceiver-{client_id}] Gemini WebSocket disconnected (WebSocketDisconnect): {wsd.code} - {wsd.reason}. Exiting loop.")
+            except asyncio.CancelledError:
+                 logger.info(f"[GeminiReceiver-{client_id}] Task cancelled.")
+                 raise # Re-raise CancelledError so the awaiter knows
+            except json.JSONDecodeError as e:
+                logger.error(f"[GeminiReceiver-{client_id}] JSON decode error processing Gemini message: {e}. Message: {msg[:100]}...")
+                # Continue might be risky if the connection is broken, maybe exit? For now, continue.
+            except KeyError as e:
+                logger.error(f"[GeminiReceiver-{client_id}] KeyError processing Gemini response: {e}. Response: {response}")
+                # Continue might be risky.
+            except Exception as e:
+                logger.error(f"[GeminiReceiver-{client_id}] Unexpected error receiving/processing from Gemini: {type(e).__name__} - {str(e)}", exc_info=True)
+                # Check if it's a disconnect-related error before deciding to break
+                if "disconnect" in str(e).lower() or "connection closed" in str(e).lower():
+                     logger.warning(f"[GeminiReceiver-{client_id}] Connection closed related error detected. Exiting loop.")
+                # Exit loop on unexpected errors to prevent infinite loops
+            finally:
+                 logger.info(f"[GeminiReceiver-{client_id}] Exiting receive_from_gemini loop.")
+                 # Ensure the task reference is cleared if the task exits itself
+                 if gemini_receive_task is asyncio.current_task():
+                     gemini_receive_task = None
+
+
         async def receive_from_client():
+            nonlocal gemini_receive_task # Allow modification/restart
             while True:
                 try:
-                    # Removed the initial state check - rely on receive_text() to raise exception on disconnect
+                    # Check client connection state before receiving
+                    if websocket.client_state != WebSocketState.CONNECTED:
+                        logger.warning(f"[ClientReceiver-{client_id}] Client WebSocket is not connected ({websocket.client_state}). Exiting loop.")
+                        break
                     logger.debug(f"[ClientReceiver-{client_id}] Waiting for message from client.")
                     message_text = await websocket.receive_text()
                     logger.debug(f"[ClientReceiver-{client_id}] Received raw message: {message_text[:100]}...") # Log truncated
@@ -555,11 +690,31 @@ async def websocket_endpoint(websocket: WebSocket):
                         memory_db.update_user_config(username, updated_config)
                         logger.info(f"[ClientReceiver-{client_id}] Updated config saved to database for user {username}")
 
-                        # Reconnect to Gemini with new config if needed
+                        # Reconnect to Gemini with new config, managing the receiver task
                         logger.info(f"[ClientReceiver-{client_id}] Reconnecting Gemini due to config change.")
-                        await gemini.close() # Close existing connection first
-                        await gemini.connect() # Establish new connection
+
+                        # Cancel existing Gemini receiver task if it's running
+                        if gemini_receive_task and not gemini_receive_task.done():
+                            logger.info(f"[ClientReceiver-{client_id}] Cancelling existing Gemini receiver task.")
+                            gemini_receive_task.cancel()
+                            try:
+                                await gemini_receive_task
+                            except asyncio.CancelledError:
+                                logger.info(f"[ClientReceiver-{client_id}] Existing Gemini receiver task cancelled.")
+                            except Exception as task_cancel_err:
+                                 logger.error(f"[ClientReceiver-{client_id}] Error awaiting cancelled Gemini task: {task_cancel_err}")
+                            finally:
+                                gemini_receive_task = None # Clear handle
+
+                        # Perform the reconnect
+                        await gemini.close()
+                        await gemini.connect()
                         logger.info(f"[ClientReceiver-{client_id}] Gemini reconnected successfully.")
+
+                        # Start a new Gemini receiver task
+                        logger.info(f"[ClientReceiver-{client_id}] Starting new Gemini receiver task.")
+                        gemini_receive_task = asyncio.create_task(receive_from_gemini())
+
 
                     elif msg_type == "audio":
                         if gemini.interrupted:
@@ -761,20 +916,18 @@ async def websocket_endpoint(websocket: WebSocket):
             logger.info(f"[GeminiReceiver-{client_id}] Exiting receive_from_gemini loop.")
 
 
-        # Run both receiving tasks concurrently
-        logger.info(f"[WebSocket-{client_id}] Starting concurrent client and Gemini receivers.")
-        try:
-            # Using asyncio.gather to wait for both tasks
-            client_task = asyncio.create_task(receive_from_client())
-            gemini_task = asyncio.create_task(receive_from_gemini())
-            await asyncio.gather(client_task, gemini_task)
-        except Exception as task_err:
-            logger.error(f"[WebSocket-{client_id}] Error during concurrent task execution: {task_err}")
+        # Start the initial Gemini receiver task
+        logger.info(f"[WebSocket-{client_id}] Starting initial Gemini receiver task.")
+        gemini_receive_task = asyncio.create_task(receive_from_gemini())
 
-        logger.info(f"[WebSocket-{client_id}] Both receiver tasks finished.")
+        # Run the client receiver loop in the main task
+        logger.info(f"[WebSocket-{client_id}] Starting client receiver loop.")
+        await receive_from_client() # This will run until the client disconnects
+
+        logger.info(f"[WebSocket-{client_id}] Client receiver loop finished.")
 
     except WebSocketDisconnect as wsd:
-         logger.info(f"[WebSocket-{client_id}] WebSocket disconnected during setup or main loop: {wsd.code} - {wsd.reason}")
+         logger.info(f"[WebSocket-{client_id}] WebSocket disconnected: {wsd.code} - {wsd.reason}")
          closed_intentionally = True # Mark as closed on disconnect
     except Exception as e:
         logger.error(f"[WebSocket-{client_id}] Unexpected error in main WebSocket handler: {type(e).__name__} - {str(e)}", exc_info=True)
@@ -790,9 +943,23 @@ async def websocket_endpoint(websocket: WebSocket):
     finally:
         # Cleanup
         logger.info(f"[WebSocket-{client_id}] Starting cleanup for connection.")
+
+        # Cancel the Gemini receiver task if it's still running
+        if gemini_receive_task and not gemini_receive_task.done():
+             logger.info(f"[WebSocket-{client_id}] Cancelling Gemini receiver task during cleanup.")
+             gemini_receive_task.cancel()
+             try:
+                 await gemini_receive_task
+             except asyncio.CancelledError:
+                 logger.info(f"[WebSocket-{client_id}] Gemini receiver task cancelled during cleanup.")
+             except Exception as task_cancel_err:
+                 # Log error, but continue cleanup
+                 logger.error(f"[WebSocket-{client_id}] Error awaiting cancelled Gemini task during cleanup: {task_cancel_err}")
+
+        # Close Gemini connection and remove from active connections
         if client_id in connections:
             logger.info(f"[WebSocket-{client_id}] Closing associated Gemini connection.")
-            gemini_conn = connections[client_id]
+            gemini_conn = connections.pop(client_id) # Use pop to remove the entry
             await gemini_conn.close() # Ensure Gemini connection is closed
             del connections[client_id]
             logger.info(f"[WebSocket-{client_id}] Removed connection entry.")
