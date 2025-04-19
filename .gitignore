@@ -172,3 +172,7 @@ backend/memories.db
 .aider*
 
 memories.db
+
+# Vim/editor swap files
+*.swp
+*.swo
