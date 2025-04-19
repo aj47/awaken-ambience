@@ -9,8 +9,6 @@ import { base64ToFloat32Array, float32ToPcm16 } from "@/lib/utils";
 // Import our components
 import AudioStatus from "./audio-status";
 import VideoDisplay from "./video-display";
-import WakeWordIndicator from "./wake-word-indicator";
-import WakeWordDebug from "./wake-word-debug";
 import ControlButtons from "./control-buttons";
 import HeaderButtons from "./header-buttons";
 
@@ -128,7 +126,6 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
       );
     }
   }, [config, isConnected]);
-  const [wakeWordTranscript, setWakeWordTranscript] = useState("");
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const lastInterruptTimeRef = useRef<number>(0);
   const lastWsConnectionAttemptRef = useRef<number>(0);
@@ -315,11 +312,7 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
             (!config.isWakeWordEnabled || wakeWordDetectedRef.current) && !isInterruptedRef.current;
           setIsAudioSending(shouldSend); // Update state immediately
 
-          if (!shouldSend) {
-            console.log(
-              "Interrupt active or wake word not detected; skipping audio send."
-            );
-          }
+          // Skip sending audio if wake word not detected or interrupted
 
           if (shouldSend) {
             const inputData = e.inputBuffer.getChannelData(0);
@@ -438,8 +431,7 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
       isPlayingRef.current = false;
     }
 
-    // Add transcript reset
-    setWakeWordTranscript("");
+    // Reset wake word state
     setWakeWordDetected(false);
     wakeWordDetectedRef.current = false;
     if (recognitionRef.current) {
@@ -658,11 +650,10 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
       recognition.lang = "en-US";
 
       recognition.onstart = () => {
-        console.log("Speech recognition started");
+        // Speech recognition started
       };
 
       recognition.onend = (event) => {
-        console.log("Speech recognition ended", event);
         // Restart recognition if streaming is active (helps capture interrupts even when Gemini is talking)
         if (isStreaming && recognitionRef.current === recognition) {
           try {
@@ -670,27 +661,23 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
             setTimeout(() => {
               if (isStreaming && recognitionRef.current === recognition) {
                 recognition.start();
-                console.log("Speech recognition restarted");
               }
             }, 300);
           } catch (err) {
-            console.log("Failed to restart speech recognition:", err);
+            // Failed to restart speech recognition
           }
         }
       };
 
       recognition.onerror = (event) => {
-        console.log("Speech recognition error:", event.error);
         if (event.error === "not-allowed" || event.error === "audio-capture") {
-          setError("Microphone already in use - disable wake word to continue");
+          setError("Microphone access error. Please check your microphone permissions.");
         }
       };
 
       recognition.onresult = (event) => {
         const latestResult = event.results[event.results.length - 1];
         const transcript = latestResult[0].transcript;
-        console.log("SpeechRecognition result:", transcript);
-        setWakeWordTranscript(transcript);
 
         // Always process final transcript
         if (latestResult.isFinal) {
@@ -702,27 +689,19 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
             lcTranscript.includes(config.cancelPhrase.toLowerCase())
           ) {
             if (Date.now() - lastInterruptTimeRef.current < 1000) {
-              console.log("Interrupt debounced");
-              setWakeWordTranscript("");
+              // Debounce interrupts to prevent multiple triggers
               return;
             }
             lastInterruptTimeRef.current = Date.now();
-            console.log(
-              "Final transcript triggering interrupt (cancel phrase detected):",
-              transcript
-            );
+
             // Play the sound effect in reverse for sleep word
             playSoundEffect(true);
 
             const sendInterrupt = () => {
-              console.log("Active generation detected; sending interrupt.");
-
               // If wake word is enabled, we need to fully deactivate it
               if (config.isWakeWordEnabled) {
-                console.log("Sleep word detected; disabling audio transmission");
                 wakeWordDetectedRef.current = false;
                 setWakeWordDetected(false);
-                setWakeWordTranscript("");
 
                 // Show a visual indicator that sleep mode is active
                 setError("Sleep mode activated. Say the wake word to resume.");
@@ -738,7 +717,6 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
               isInterruptedRef.current = true;
 
               if (currentAudioSourceRef.current) {
-                console.log("Stopping current audio source due to interrupt.");
                 currentAudioSourceRef.current.stop();
                 currentAudioSourceRef.current = null;
               }
@@ -750,7 +728,6 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
                 wsRef.current.readyState === WebSocket.OPEN
               ) {
                 wsRef.current.send(JSON.stringify({ type: "interrupt" }));
-                console.log("Interrupt message sent to backend via WebSocket.");
 
                 // Only show interrupting message if wake word is not enabled
                 if (!config.isWakeWordEnabled) {
@@ -762,8 +739,6 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
                   }, 2000);
                 }
                 // Do not close the websocket connection; this lets new audio be sent after interrupt.
-              } else {
-                console.log("WebSocket not open or unavailable for interrupt.");
               }
             };
             if (
@@ -795,10 +770,6 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
             config.isWakeWordEnabled &&
             lcTranscript.includes(config.wakeWord.toLowerCase())
           ) {
-            console.log(
-              "Wake word detected; enabling audio transmission:",
-              transcript
-            );
             setWakeWordDetected(true);
             wakeWordDetectedRef.current = true;
 
@@ -814,7 +785,6 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
 
             // Force reconnection if needed
             if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-              console.log("Reconnecting WebSocket after wake word detection");
               const token = localStorage.getItem("authToken");
               if (!token) {
                 setError("Authentication required. Please log in again.");
@@ -822,7 +792,7 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
                 return;
               }
               const ws = new WebSocket(
-                `ws://54.158.95.38:8000/ws?token=${encodeURIComponent(token)}`
+                `${process.env.NEXT_PUBLIC_API_URL.replace("http", "ws")}/ws?token=${encodeURIComponent(token)}`
               );
               ws.onopen = async () => {
                 ws.send(JSON.stringify({ type: "config", config: config }));
@@ -833,6 +803,7 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
             }
           }
 
+          // Update transcript for non-command speech
           if (
             (config.allowInterruptions || config.isWakeWordEnabled) &&
             !(
@@ -842,12 +813,7 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
                 lcTranscript.includes(config.wakeWord.toLowerCase()))
             )
           ) {
-            console.log(
-              "Final transcript does not contain wake word or cancel phrase:",
-              transcript
-            );
-            // Retain the transcript for debugging
-            setWakeWordTranscript(transcript);
+            // Non-command speech detected
           }
         }
       };
@@ -920,16 +886,6 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
             videoRef={videoRef}
             canvasRef={canvasRef}
             videoSource={videoSource}
-          />
-        )}
-
-        <WakeWordIndicator wakeWordDetected={wakeWordDetected} />
-
-        {config.isWakeWordEnabled && (
-          <WakeWordDebug
-            isStreaming={isStreaming}
-            wakeWordTranscript={wakeWordTranscript}
-            wakeWord={config.wakeWord}
           />
         )}
       </div>
