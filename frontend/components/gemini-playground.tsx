@@ -794,28 +794,8 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
                 console.log("WebSocket not open or unavailable for interrupt.");
               }
             };
-            if (
-              audioBufferRef.current.length > 0 ||
-              currentAudioSourceRef.current !== null
-            ) {
-              sendInterrupt();
-            } else {
-              console.log(
-                "No active generation detected; scheduling delayed check for interrupt (300ms)..."
-              );
-              setTimeout(() => {
-                if (
-                  audioBufferRef.current.length > 0 ||
-                  currentAudioSourceRef.current !== null
-                ) {
-                  sendInterrupt();
-                } else {
-                  console.log(
-                    "Delayed check: Still no active generation; not sending interrupt."
-                  );
-                }
-              }, 300);
-            }
+            // Always send the interrupt signal to the backend when cancel phrase is detected
+            sendInterrupt();
           }
 
           // Independently check for wake word if enabled
