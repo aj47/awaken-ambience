@@ -140,6 +140,7 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
     stream: MediaStream;
   } | null>(null);
   const wakeWordDetectedRef = useRef(false);
+  const isInterruptedRef = useRef<boolean>(false);
   const [videoEnabled, setVideoEnabled] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -199,6 +200,14 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
       if (response.type === "audio") {
         const audioData = base64ToFloat32Array(response.data);
         playAudioData(audioData);
+      } else if (response.type === "interrupt") {
+        console.log("Received interrupt confirmation from server:", response);
+      } else if (response.type === "interrupt_confirmed") {
+        console.log("Received interrupt_confirmed from Gemini API:", response);
+        stopAudio(); // Stop audio playback when interrupt is confirmed
+      } else if (response.type === "stop_audio") {
+        console.log("Received stop_audio command from server");
+        stopAudio(); // Stop audio playback
       }
     };
 
@@ -279,7 +288,13 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
                 const audioData = base64ToFloat32Array(response.data);
                 playAudioData(audioData);
               } else if (response.type === "interrupt") {
-                console.log("Received interrupt response after reconnect.");
+                console.log("Received interrupt confirmation from server:", response);
+              } else if (response.type === "interrupt_confirmed") {
+                console.log("Received interrupt_confirmed from Gemini API:", response);
+                stopAudio(); // Stop audio playback when interrupt is confirmed
+              } else if (response.type === "stop_audio") {
+                console.log("Received stop_audio command from server");
+                stopAudio(); // Stop audio playback
               }
             };
             ws.onerror = (error) => {
@@ -335,6 +350,23 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
     } catch (err) {
       setError("Failed to access microphone: " + err.message);
     }
+  };
+
+  // Function to stop audio playback
+  const stopAudio = () => {
+    isInterruptedRef.current = true;
+
+    if (currentAudioSourceRef.current) {
+      currentAudioSourceRef.current.stop();
+      currentAudioSourceRef.current = null;
+    }
+    audioBufferRef.current = [];
+    isPlayingRef.current = false;
+
+    // Reset the interrupted state after a short delay
+    setTimeout(() => {
+      isInterruptedRef.current = false;
+    }, 500);
   };
 
   // Stop streaming
@@ -407,6 +439,12 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
       audioBufferRef.current = [];
     }
 
+    // Don't buffer audio if we're in an interrupted state
+    if (isInterruptedRef.current) {
+      console.log("Skipping audio buffering due to active interruption");
+      return;
+    }
+
     // Add new audio data to queue
     audioBufferRef.current.push(audioData);
 
@@ -417,7 +455,7 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
   };
 
   const playNextChunk = async () => {
-    if (!audioBufferRef.current || audioBufferRef.current.length === 0) {
+    if (!audioBufferRef.current || audioBufferRef.current.length === 0 || isInterruptedRef.current) {
       isPlayingRef.current = false;
       return;
     }
@@ -440,7 +478,7 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
 
     // When this chunk ends, play the next one
     source.onended = () => {
-      if (audioBufferRef.current.length > 0) {
+      if (audioBufferRef.current.length > 0 && !isInterruptedRef.current) {
         playNextChunk();
       } else {
         isPlayingRef.current = false;
@@ -620,17 +658,29 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
               wakeWordDetectedRef.current = false;
               setWakeWordDetected(false);
 
+              // Set the interrupted flag to prevent buffering new audio
+              isInterruptedRef.current = true;
+
               if (currentAudioSourceRef.current) {
                 console.log("Stopping current audio source due to interrupt.");
                 currentAudioSourceRef.current.stop();
                 currentAudioSourceRef.current = null;
               }
+
+              // Clear any buffered audio
+              audioBufferRef.current = [];
               if (
                 wsRef.current &&
                 wsRef.current.readyState === WebSocket.OPEN
               ) {
                 wsRef.current.send(JSON.stringify({ type: "interrupt" }));
                 console.log("Interrupt message sent to backend via WebSocket.");
+                // Show a visual indicator that interruption is in progress
+                setError("Interrupting Gemini...");
+                // Clear the error message after 2 seconds
+                setTimeout(() => {
+                  setError(null);
+                }, 2000);
                 // Do not close the websocket connection; this lets new audio be sent after interrupt.
               } else {
                 console.log("WebSocket not open or unavailable for interrupt.");
@@ -743,11 +793,11 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
       <div className="space-y-6 relative z-10 flex-grow">
         <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/40 via-purple-900/20 to-transparent rounded-3xl blur-xl"></div>
         <div className="pt-2">
-          <HeaderButtons 
-            isConnected={isConnected} 
+          <HeaderButtons
+            isConnected={isConnected}
             config={config}
             setConfig={setConfig}
-            onLogout={onLogout} 
+            onLogout={onLogout}
           />
         </div>
         <div className="flex flex-col items-center justify-center w-full min-h-[20vh]">

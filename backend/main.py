@@ -64,6 +64,7 @@ class GeminiConnection:
         self.interrupted = False
         self.memory_db = MemoryDB()
         self.username = None # Added to store username
+        self.interrupt_sent = False # Flag to track if interrupt was sent to Gemini API
 
     async def connect(self):
         """Initialize connection to Gemini"""
@@ -171,7 +172,7 @@ class GeminiConnection:
                 "system_instruction": {
                     "parts": [
                         {
-                            "text": self.config["systemPrompt"] + 
+                            "text": self.config["systemPrompt"] +
                             "\n\nHere are recent memories:\n" + memory_context +
                             "\n\nYou can also use the memory functions store_memory, get_recent_memories, and search_memories."
                             "\n\nUse the memory function often."
@@ -198,7 +199,7 @@ class GeminiConnection:
         # Validate and normalize config
         if not isinstance(config, dict):
             raise ValueError("Config must be a dictionary")
-            
+
         # Ensure systemPrompt is properly named
         if "systemPrompt" in config:
             config["systemPrompt"] = config["systemPrompt"]
@@ -228,6 +229,34 @@ class GeminiConnection:
         except Exception as e:
             logger.error(f"[GeminiConnection-{self.username}] Error sending audio data: {e}")
             await self.close()
+
+    async def send_interrupt(self):
+        """Send an interrupt signal to Gemini to stop the current generation"""
+        # Check Gemini connection state correctly
+        if not self.ws or self.ws.state == State.CLOSED:
+            logger.warning(f"[GeminiConnection-{self.username}] Attempted to send interrupt while WebSocket is closed or None.")
+            return False
+
+        # Set the interrupted flag immediately to stop sending audio
+        self.interrupted = True
+        self.interrupt_sent = True
+
+        # Send the interrupt message to Gemini
+        interrupt_msg = {
+            "realtime_input": {
+                "interrupt": {}
+            }
+        }
+
+        try:
+            logger.info(f"[GeminiConnection-{self.username}] Sending interrupt signal to Gemini API.")
+            await self.ws.send(json.dumps(interrupt_msg))
+            logger.info(f"[GeminiConnection-{self.username}] Interrupt signal sent successfully.")
+            return True
+        except Exception as e:
+            logger.error(f"[GeminiConnection-{self.username}] Error sending interrupt signal: {e}")
+            await self.close()
+            return False
 
     async def receive(self):
         """Receive message from Gemini"""
@@ -427,7 +456,7 @@ async def login_for_access_token(
             detail="Incorrect username or password",
         )
     access_token = create_access_token(
-        data={"sub": user.username}, 
+        data={"sub": user.username},
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     )
     return {"access_token": access_token, "token_type": "bearer"}
@@ -494,7 +523,7 @@ async def websocket_endpoint(websocket: WebSocket):
             "wakeWord": "",
             "cancelPhrase": ""
         }
-        
+
         # Merge with defaults for any missing fields
         for key, value in default_config.items():
             if key not in const_config:
@@ -593,6 +622,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         if gemini.interrupted:
                              logger.info(f"[GeminiReceiver-{client_id}] Turn complete received, but interrupt was active. Resetting interrupt flag.")
                              gemini.interrupted = False # Reset interrupt flag after turn completion signal
+                             gemini.interrupt_sent = False # Reset interrupt sent flag
                         else:
                             logger.info(f"[GeminiReceiver-{client_id}] Turn complete. Sending confirmation to client.")
                             try:
@@ -604,6 +634,29 @@ async def websocket_endpoint(websocket: WebSocket):
                             except Exception as send_err:
                                 logger.error(f"[GeminiReceiver-{client_id}] Error sending turn_complete to client: {send_err}")
                                 break # Assume client disconnected
+
+                    # Check for interrupted response
+                    if response.get("serverContent", {}).get("interrupted") is not None:
+                        logger.info(f"[GeminiReceiver-{client_id}] Received interrupted signal from Gemini API.")
+                        # Set the interrupted flag to ensure no more audio is sent
+                        gemini.interrupted = True
+                        try:
+                            if websocket.client_state == WebSocketState.CONNECTED:
+                                # Send interrupt confirmation to client
+                                await websocket.send_json({
+                                    "type": "interrupt_confirmed",
+                                    "data": True
+                                })
+                                logger.info(f"[GeminiReceiver-{client_id}] Sent interrupt_confirmed to client.")
+
+                                # Also send a stop_audio message to tell the client to stop playing any buffered audio
+                                await websocket.send_json({
+                                    "type": "stop_audio",
+                                    "data": True
+                                })
+                                logger.info(f"[GeminiReceiver-{client_id}] Sent stop_audio to client.")
+                        except Exception as send_err:
+                            logger.error(f"[GeminiReceiver-{client_id}] Error sending interrupt_confirmed to client: {send_err}")
 
             except ws_exceptions.ConnectionClosedOK:
                 logger.info(f"[GeminiReceiver-{client_id}] Gemini WebSocket closed cleanly (OK). Exiting loop.")
@@ -739,12 +792,24 @@ async def websocket_endpoint(websocket: WebSocket):
 
                     elif msg_type == "interrupt":
                         logger.info(f"[ClientReceiver-{client_id}] Received interrupt command from client.")
-                        gemini.interrupted = True # Mark the current generation as canceled
+
+                        # Send the interrupt signal to Gemini API
+                        interrupt_success = await gemini.send_interrupt()
+
+                        # Send confirmation to client
                         logger.info(f"[ClientReceiver-{client_id}] Sending interrupt confirmation to client.")
                         await websocket.send_json({
                             "type": "interrupt",
-                            "message": "Generation canceled."
+                            "message": "Generation canceled.",
+                            "success": interrupt_success
                         })
+
+                        # Also send a stop_audio message to tell the client to stop playing any buffered audio
+                        await websocket.send_json({
+                            "type": "stop_audio",
+                            "data": True
+                        })
+                        logger.info(f"[ClientReceiver-{client_id}] Sent stop_audio to client.")
                         continue # Don't process further in this loop iteration
 
                     else:
@@ -978,7 +1043,7 @@ async def update_config(request: Request):
             "wakeWord": "",
             "cancelPhrase": ""
         }
-        
+
         # Merge with defaults for any missing fields
         for key, value in default_config.items():
             if key not in config_data:
