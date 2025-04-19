@@ -155,6 +155,7 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
   const audioBufferRef = useRef<Float32Array[]>([]);
   const isPlayingRef = useRef(false);
   const currentAudioSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const sfxAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const startStream = async (mode: "audio" | "camera" | "screen") => {
     if (mode !== "audio") {
@@ -349,6 +350,60 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
       setIsStreaming(true);
     } catch (err) {
       setError("Failed to access microphone: " + err.message);
+    }
+  };
+
+  // Function to play sound effects
+  const playSoundEffect = (reverse = false) => {
+    try {
+      // For normal playback, use the HTML Audio element
+      if (!reverse) {
+        // Create a new audio element if it doesn't exist
+        if (!sfxAudioRef.current) {
+          sfxAudioRef.current = new Audio('/sfx.mp3');
+        }
+
+        // Reset the audio to the beginning
+        sfxAudioRef.current.currentTime = 0;
+
+        // Play the sound normally
+        sfxAudioRef.current.play().catch(err => {
+          console.error('Error playing sound effect:', err);
+        });
+      }
+      // For reverse playback, use the Web Audio API
+      else if (audioContextRef.current) {
+        // Fetch the sound file
+        fetch('/sfx.mp3')
+          .then(response => response.arrayBuffer())
+          .then(arrayBuffer => audioContextRef.current.decodeAudioData(arrayBuffer))
+          .then(audioBuffer => {
+            // Create a reversed copy of the audio data
+            const reversedBuffer = audioContextRef.current.createBuffer(
+              audioBuffer.numberOfChannels,
+              audioBuffer.length,
+              audioBuffer.sampleRate
+            );
+
+            // Copy and reverse each channel
+            for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
+              const channelData = audioBuffer.getChannelData(channel);
+              const reversedData = reversedBuffer.getChannelData(channel);
+              for (let i = 0; i < channelData.length; i++) {
+                reversedData[i] = channelData[channelData.length - 1 - i];
+              }
+            }
+
+            // Create a new buffer source for the reversed audio
+            const source = audioContextRef.current.createBufferSource();
+            source.buffer = reversedBuffer;
+            source.connect(audioContextRef.current.destination);
+            source.start();
+          })
+          .catch(err => console.error('Error playing reversed sound effect:', err));
+      }
+    } catch (err) {
+      console.error('Error with sound effect playback:', err);
     }
   };
 
@@ -652,6 +707,9 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
               "Final transcript triggering interrupt (cancel phrase detected):",
               transcript
             );
+            // Play the sound effect in reverse for sleep word
+            playSoundEffect(true);
+
             const sendInterrupt = () => {
               console.log("Active generation detected; sending interrupt.");
               audioBufferRef.current = [];
@@ -721,6 +779,9 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
             );
             setWakeWordDetected(true);
             wakeWordDetectedRef.current = true;
+
+            // Play the wake word sound effect
+            playSoundEffect(false);
 
             // Reset any interrupt state and ensure audio transmission
             audioBufferRef.current = [];
