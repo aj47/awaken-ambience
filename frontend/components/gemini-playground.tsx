@@ -11,8 +11,10 @@ import AudioStatus from "./audio-status";
 import VideoDisplay from "./video-display";
 import WakeWordIndicator from "./wake-word-indicator";
 import WakeWordDebug from "./wake-word-debug";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import ControlButtons from "./control-buttons";
 import HeaderButtons from "./header-buttons";
+import { Label } from "@/components/ui/label";
 
 interface Config {
   systemPrompt: string;
@@ -109,7 +111,27 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
     };
 
     fetchConfig();
+    getVideoDevices(); // Fetch video devices on mount
   }, []);
+
+  // Function to get available video devices
+  const getVideoDevices = async () => {
+    try {
+      if (!navigator.mediaDevices?.enumerateDevices) {
+        console.warn("enumerateDevices() not supported.");
+        return;
+      }
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoInputs = devices.filter(device => device.kind === 'videoinput');
+      setVideoDevices(videoInputs);
+      if (videoInputs.length > 0 && !selectedVideoDeviceId) {
+        setSelectedVideoDeviceId(videoInputs[0].deviceId); // Select the first device by default
+      }
+    } catch (err) {
+      console.error("Error enumerating video devices:", err);
+      setError("Could not list video devices.");
+    }
+  };
 
   // Send updated config to backend when it changes
   useEffect(() => {
@@ -147,9 +169,9 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
   const videoStreamRef = useRef<MediaStream | null>(null);
   const videoIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [chatMode, setChatMode] = useState<"audio" | "video" | null>(null);
-  const [videoSource, setVideoSource] = useState<"camera" | "screen" | null>(
-    null
-  );
+  const [videoSource, setVideoSource] = useState<"camera" | "screen" | null>(null);
+  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedVideoDeviceId, setSelectedVideoDeviceId] = useState<string | null>(null);
 
   const voices = ["Puck", "Charon", "Kore", "Fenrir", "Aoede"];
   const audioBufferRef = useRef<Float32Array[]>([]);
@@ -552,11 +574,17 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
     if (videoEnabled && videoRef.current) {
       const startVideo = async () => {
         try {
-          let stream;
+          let stream: MediaStream;
           if (videoSource === "camera") {
-            stream = await navigator.mediaDevices.getUserMedia({
-              video: { width: { ideal: 320 }, height: { ideal: 240 } },
-            });
+            const constraints: MediaStreamConstraints = {
+              video: {
+                width: { ideal: 320 },
+                height: { ideal: 240 },
+                deviceId: selectedVideoDeviceId ? { exact: selectedVideoDeviceId } : undefined
+              }
+            };
+            console.log("Requesting camera stream with constraints:", constraints);
+            stream = await navigator.mediaDevices.getUserMedia(constraints);
           } else if (videoSource === "screen") {
             stream = await navigator.mediaDevices.getDisplayMedia({
               video: { width: { ideal: 1920 }, height: { ideal: 1080 } },
