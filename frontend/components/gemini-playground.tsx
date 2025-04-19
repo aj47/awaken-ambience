@@ -927,6 +927,29 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
           </Alert>
         )}
 
+        {!isStreaming && videoDevices.length > 0 && (
+          <div className="flex justify-center w-full my-4">
+            <div className="w-full max-w-xs space-y-2">
+              <Label htmlFor="video-device-select" className="text-indigo-200">Select Camera</Label>
+              <Select
+                value={selectedVideoDeviceId || ''}
+                onValueChange={(value) => setSelectedVideoDeviceId(value)}
+              >
+                <SelectTrigger id="video-device-select" className="w-full">
+                  <SelectValue placeholder="Select video device" />
+                </SelectTrigger>
+                <SelectContent>
+                  {videoDevices.map((device) => (
+                    <SelectItem key={device.deviceId} value={device.deviceId}>
+                      {device.label || `Camera ${videoDevices.indexOf(device) + 1}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        )}
+
         <div className="flex justify-center w-full my-6">
           <ControlButtons
             isStreaming={isStreaming}
