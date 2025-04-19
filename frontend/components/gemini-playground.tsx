@@ -312,7 +312,7 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
 
         if (wsRef.current?.readyState === WebSocket.OPEN) {
           const shouldSend =
-            !config.isWakeWordEnabled || wakeWordDetectedRef.current;
+            (!config.isWakeWordEnabled || wakeWordDetectedRef.current) && !isInterruptedRef.current;
           setIsAudioSending(shouldSend); // Update state immediately
 
           if (!shouldSend) {
@@ -419,9 +419,13 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
     isPlayingRef.current = false;
 
     // Reset the interrupted state after a short delay
-    setTimeout(() => {
-      isInterruptedRef.current = false;
-    }, 500);
+    // Only if wake word is not enabled or if wake word is detected
+    // This ensures we stay in sleep mode when needed
+    if (!config.isWakeWordEnabled || wakeWordDetectedRef.current) {
+      setTimeout(() => {
+        isInterruptedRef.current = false;
+      }, 500);
+    }
   };
 
   // Stop streaming
@@ -712,9 +716,23 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
 
             const sendInterrupt = () => {
               console.log("Active generation detected; sending interrupt.");
+
+              // If wake word is enabled, we need to fully deactivate it
+              if (config.isWakeWordEnabled) {
+                console.log("Sleep word detected; disabling audio transmission");
+                wakeWordDetectedRef.current = false;
+                setWakeWordDetected(false);
+                setWakeWordTranscript("");
+
+                // Show a visual indicator that sleep mode is active
+                setError("Sleep mode activated. Say the wake word to resume.");
+                // Clear the error message after 3 seconds
+                setTimeout(() => {
+                  setError(null);
+                }, 3000);
+              }
+
               audioBufferRef.current = [];
-              wakeWordDetectedRef.current = false;
-              setWakeWordDetected(false);
 
               // Set the interrupted flag to prevent buffering new audio
               isInterruptedRef.current = true;
@@ -733,12 +751,16 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
               ) {
                 wsRef.current.send(JSON.stringify({ type: "interrupt" }));
                 console.log("Interrupt message sent to backend via WebSocket.");
-                // Show a visual indicator that interruption is in progress
-                setError("Interrupting Gemini...");
-                // Clear the error message after 2 seconds
-                setTimeout(() => {
-                  setError(null);
-                }, 2000);
+
+                // Only show interrupting message if wake word is not enabled
+                if (!config.isWakeWordEnabled) {
+                  // Show a visual indicator that interruption is in progress
+                  setError("Interrupting Gemini...");
+                  // Clear the error message after 2 seconds
+                  setTimeout(() => {
+                    setError(null);
+                  }, 2000);
+                }
                 // Do not close the websocket connection; this lets new audio be sent after interrupt.
               } else {
                 console.log("WebSocket not open or unavailable for interrupt.");
