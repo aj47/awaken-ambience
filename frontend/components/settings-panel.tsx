@@ -23,9 +23,25 @@ interface SettingsPanelProps {
   config: Config;
   setConfig: React.Dispatch<React.SetStateAction<Config>>;
   isConnected: boolean;
+  audioDevices: MediaDeviceInfo[];
+  selectedAudioDeviceId: string | null;
+  setSelectedAudioDeviceId: React.Dispatch<React.SetStateAction<string | null>>;
+  videoDevices: MediaDeviceInfo[];
+  selectedVideoDeviceId: string | null;
+  setSelectedVideoDeviceId: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
-export default function SettingsPanel({ config, setConfig, isConnected }: SettingsPanelProps): React.JSX.Element {
+export default function SettingsPanel({
+  config,
+  setConfig,
+  isConnected,
+  audioDevices,
+  selectedAudioDeviceId,
+  setSelectedAudioDeviceId,
+  videoDevices,
+  selectedVideoDeviceId,
+  setSelectedVideoDeviceId
+}: SettingsPanelProps): React.JSX.Element {
   const [isOpen, setIsOpen] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -80,7 +96,50 @@ export default function SettingsPanel({ config, setConfig, isConnected }: Settin
       {isOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-20" onClick={() => setIsOpen(false)}>
           <Card className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90vw] max-w-[1200px] h-[90vh] max-h-[800px] overflow-y-auto z-30" onClick={(e) => e.stopPropagation()}>
-            <CardContent className="pt-6 space-y-4">
+            <CardContent className="pt-6 space-y-6"> {/* Increased spacing */}
+            {/* Device Selectors */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="audio-device-select" className="text-indigo-200">Microphone Input</Label>
+                <Select
+                  value={selectedAudioDeviceId || ''}
+                  onValueChange={(value) => setSelectedAudioDeviceId(value)}
+                  disabled={isConnected || audioDevices.length === 0}
+                >
+                  <SelectTrigger id="audio-device-select" className="w-full">
+                    <SelectValue placeholder="Select audio input" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {audioDevices.map((device) => (
+                      <SelectItem key={device.deviceId} value={device.deviceId}>
+                        {device.label || `Microphone ${audioDevices.indexOf(device) + 1}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="video-device-select" className="text-indigo-200">Camera Input</Label>
+                <Select
+                  value={selectedVideoDeviceId || ''}
+                  onValueChange={(value) => setSelectedVideoDeviceId(value)}
+                  disabled={isConnected || videoDevices.length === 0}
+                >
+                  <SelectTrigger id="video-device-select" className="w-full">
+                    <SelectValue placeholder="Select video input" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {videoDevices.map((device) => (
+                      <SelectItem key={device.deviceId} value={device.deviceId}>
+                        {device.label || `Camera ${videoDevices.indexOf(device) + 1}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Existing Settings */}
             <div className="space-y-2">
               <Label htmlFor="system-prompt" className="text-indigo-200">Ambience Prompt</Label>
               <Textarea

@@ -12,7 +12,7 @@ import VideoDisplay from "./video-display";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import ControlButtons from "./control-buttons";
 import HeaderButtons from "./header-buttons";
-import { Label } from "@/components/ui/label";
+import { Label } from "@/components/ui/label"; // Keep Label import if used elsewhere, otherwise remove if only for the moved selector
 
 interface Config {
   systemPrompt: string;
@@ -110,7 +110,28 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
 
     fetchConfig();
     getVideoDevices(); // Fetch video devices on mount
+    getAudioDevices(); // Fetch audio devices on mount
   }, []);
+
+  // Function to get available audio devices
+  const getAudioDevices = async () => {
+    try {
+      if (!navigator.mediaDevices?.enumerateDevices) {
+        console.warn("enumerateDevices() not supported.");
+        return;
+      }
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const audioInputs = devices.filter(device => device.kind === 'audioinput');
+      setAudioDevices(audioInputs);
+      if (audioInputs.length > 0 && !selectedAudioDeviceId) {
+        setSelectedAudioDeviceId(audioInputs[0].deviceId); // Select the first device by default
+      }
+    } catch (err) {
+      console.error("Error enumerating audio devices:", err);
+      setError("Could not list audio devices.");
+    }
+  };
+
 
   // Function to get available video devices
   const getVideoDevices = async () => {
@@ -170,6 +191,8 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
   const [videoSource, setVideoSource] = useState<"camera" | "screen" | null>(null);
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedVideoDeviceId, setSelectedVideoDeviceId] = useState<string | null>(null);
+  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedAudioDeviceId, setSelectedAudioDeviceId] = useState<string | null>(null);
 
   const voices = ["Puck", "Charon", "Kore", "Fenrir", "Aoede"];
   const audioBufferRef = useRef<Float32Array[]>([]);
@@ -259,11 +282,16 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
         sampleRate: 16000, // Required by Gemini
       });
 
-      // Get microphone stream
+      // Get microphone stream using selected device
+      const audioConstraints: MediaTrackConstraints = {
+        echoCancellation: true,
+        deviceId: selectedAudioDeviceId ? { exact: selectedAudioDeviceId } : undefined
+      };
+      console.log("Requesting audio stream with constraints:", audioConstraints);
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true },
+        audio: audioConstraints,
       });
-      console.log("Audio stream started with echo cancellation");
+      console.log("Audio stream started");
 
       // Always share the audio stream with SpeechRecognition (for transcription)
       if (recognitionRef.current) {
@@ -884,9 +912,16 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
         <div className="pt-2">
           <HeaderButtons
             isConnected={isConnected}
+            isConnected={isConnected}
             config={config}
             setConfig={setConfig}
             onLogout={onLogout}
+            audioDevices={audioDevices}
+            selectedAudioDeviceId={selectedAudioDeviceId}
+            setSelectedAudioDeviceId={setSelectedAudioDeviceId}
+            videoDevices={videoDevices}
+            selectedVideoDeviceId={selectedVideoDeviceId}
+            setSelectedVideoDeviceId={setSelectedVideoDeviceId}
           />
         </div>
         <div className="flex flex-col items-center justify-center w-full min-h-[20vh]">
@@ -905,28 +940,7 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
           </Alert>
         )}
 
-        {!isStreaming && videoDevices.length > 0 && (
-          <div className="flex justify-center w-full my-4">
-            <div className="w-full max-w-xs space-y-2">
-              <Label htmlFor="video-device-select" className="text-indigo-200">Select Camera</Label>
-              <Select
-                value={selectedVideoDeviceId || ''}
-                onValueChange={(value) => setSelectedVideoDeviceId(value)}
-              >
-                <SelectTrigger id="video-device-select" className="w-full">
-                  <SelectValue placeholder="Select video device" />
-                </SelectTrigger>
-                <SelectContent>
-                  {videoDevices.map((device) => (
-                    <SelectItem key={device.deviceId} value={device.deviceId}>
-                      {device.label || `Camera ${videoDevices.indexOf(device) + 1}`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        )}
+        {/* Camera selector removed from here */}
 
         <div className="flex justify-center w-full my-6">
           <ControlButtons
