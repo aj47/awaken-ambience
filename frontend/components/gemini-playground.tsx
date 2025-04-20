@@ -9,8 +9,6 @@ import { base64ToFloat32Array, float32ToPcm16 } from "@/lib/utils";
 // Import our components
 import AudioStatus from "./audio-status";
 import VideoDisplay from "./video-display";
-import WakeWordIndicator from "./wake-word-indicator";
-import WakeWordDebug from "./wake-word-debug";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import ControlButtons from "./control-buttons";
 import HeaderButtons from "./header-buttons";
