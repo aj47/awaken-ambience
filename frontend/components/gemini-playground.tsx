@@ -951,14 +951,6 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
             videoSource={videoSource}
           />
         )}
-
-        {config.isWakeWordEnabled && (
-          <WakeWordDebug
-            isStreaming={isStreaming}
-            wakeWordTranscript={wakeWordTranscript}
-            wakeWord={config.wakeWord}
-          />
-        )}
       </div>
     </div>
   );
