@@ -952,8 +952,6 @@ export default function GeminiPlayground({ onLogout }: GeminiPlaygroundProps) {
           />
         )}
 
-        <WakeWordIndicator wakeWordDetected={wakeWordDetected} />
-
         {config.isWakeWordEnabled && (
           <WakeWordDebug
             isStreaming={isStreaming}
